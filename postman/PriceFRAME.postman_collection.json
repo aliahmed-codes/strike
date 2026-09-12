@@ -1,0 +1,133 @@
+{
+  "info": {
+    "name": "PriceFRAME API",
+    "description": "API collection for the PriceFRAME cross-border pricing/quoting engine. Import the accompanying \"PriceFRAME - Local\" environment alongside this collection and select it before sending requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Ada Lovelace\",\n  \"email\": \"ada@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Creates a new user account and immediately logs them in. Returns the user's public info and a bearer token valid for 30 days.\n\nFails with 409 if the email is already registered, or 422 if the input is invalid."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('token', body.token);",
+                  "    pm.test('Response contains a token', () => pm.expect(body.token).to.be.a('string'));",
+                  "    pm.test('Response does not contain the password', () => pm.expect(body.user).to.not.have.property('password'));",
+                  "} else {",
+                  "    pm.test('Register did not return 201 (email likely already registered — try Login instead, or change the email in the request body)', () => {});",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ada@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Logs in an existing user with email + password. Returns the user's public info and a new bearer token valid for 30 days.\n\nFails with 400 for an unknown email or an incorrect password (same error either way, so it can't be used to discover registered emails)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login succeeded (200)', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('token', body.token);",
+                  "    pm.test('Response contains a token', () => pm.expect(body.token).to.be.a('string'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Returns the currently authenticated user, identified by the bearer token saved from Register/Login.\n\nFails with 401 if the token is missing, invalid, or has been logged out."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returned the current user (200)', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Revokes the current bearer token. After this, the same token can no longer be used to call Me or Logout again (try Me again afterwards to confirm — it should return 401)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Logout succeeded (204)', () => pm.response.to.have.status(204));",
+                  "if (pm.response.code === 204) {",
+                  "    pm.environment.set('token', '');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
