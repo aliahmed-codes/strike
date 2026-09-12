@@ -1,17 +1,12 @@
 export interface AuthUser {
   id: number
-  fullName: string
+  firstName: string
+  lastName: string
   email: string
   role: 'admin' | 'sales' | 'viewer'
 }
 
 export interface LoginPayload {
-  email: string
-  password: string
-}
-
-export interface RegisterPayload {
-  fullName: string
   email: string
   password: string
 }

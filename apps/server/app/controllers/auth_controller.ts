@@ -1,34 +1,30 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import User from '#models/user'
-import { loginValidator, registerValidator } from '#validators/auth'
+import { loginValidator } from '#validators/auth'
+
+function serializeUser(user: User) {
+  return {
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    role: user.role,
+  }
+}
 
 export default class AuthController {
-  async register({ request, response }: HttpContext) {
-    const { fullName, email, password } = await request.validateUsing(registerValidator)
-
-    const existing = await User.findBy('email', email)
-    if (existing) {
-      return response.conflict({ message: 'An account with this email already exists' })
-    }
-
-    const user = await User.create({ fullName, email, password, role: 'sales' })
-    const token = await User.accessTokens.create(user, ['*'], { expiresIn: '30 days' })
-
-    return response.created({
-      user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role },
-      token: token.value!.release(),
-      expiresAt: token.expiresAt ? token.expiresAt.toISOString() : null,
-    })
-  }
-
   async login({ request, response }: HttpContext) {
     const { email, password } = await request.validateUsing(loginValidator)
 
     const user = await User.verifyCredentials(email, password)
+    if (!user.isActive) {
+      return response.forbidden({ message: 'This account has been deactivated' })
+    }
+
     const token = await User.accessTokens.create(user, ['*'], { expiresIn: '30 days' })
 
     return response.ok({
-      user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role },
+      user: serializeUser(user),
       token: token.value!.release(),
       expiresAt: token.expiresAt ? token.expiresAt.toISOString() : null,
     })
@@ -43,7 +39,6 @@ export default class AuthController {
   }
 
   async me({ auth }: HttpContext) {
-    const user = auth.getUserOrFail()
-    return { id: user.id, fullName: user.fullName, email: user.email, role: user.role }
+    return serializeUser(auth.getUserOrFail())
   }
 }

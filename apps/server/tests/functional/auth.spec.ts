@@ -1,54 +1,22 @@
 import { test } from '@japa/runner'
 import User from '#models/user'
 
-const validRegisterPayload = {
-  fullName: 'Ada Lovelace',
+const validCredentials = {
+  firstName: 'Ada',
+  lastName: 'Lovelace',
   email: 'ada@example.com',
   password: 'password123',
 }
 
-test.group('Auth: register', () => {
-  test('registers a new user and returns a token', async ({ client, assert }) => {
-    const response = await client.post('/auth/register').json(validRegisterPayload)
-
-    response.assertStatus(201)
-    response.assertBodyContains({
-      user: {
-        fullName: 'Ada Lovelace',
-        email: 'ada@example.com',
-        role: 'sales',
-      },
-    })
-    assert.isString(response.body().token)
-    assert.notProperty(response.body().user, 'password')
-  })
-
-  test('rejects registration with an already-used email', async ({ client }) => {
-    await User.create({ ...validRegisterPayload, role: 'sales' })
-
-    const response = await client.post('/auth/register').json(validRegisterPayload)
-
-    response.assertStatus(409)
-  })
-
-  test('rejects registration with invalid input', async ({ client }) => {
-    const response = await client
-      .post('/auth/register')
-      .json({ fullName: '', email: 'not-an-email', password: '123' })
-
-    response.assertStatus(422)
-  })
-})
-
 test.group('Auth: login', (group) => {
   group.each.setup(async () => {
-    await User.create({ ...validRegisterPayload, role: 'sales' })
+    await User.create({ ...validCredentials, role: 'sales' })
   })
 
   test('logs in with correct credentials', async ({ client, assert }) => {
     const response = await client.post('/auth/login').json({
-      email: validRegisterPayload.email,
-      password: validRegisterPayload.password,
+      email: validCredentials.email,
+      password: validCredentials.password,
     })
 
     response.assertStatus(200)
@@ -57,7 +25,7 @@ test.group('Auth: login', (group) => {
 
   test('rejects login with the wrong password', async ({ client }) => {
     const response = await client.post('/auth/login').json({
-      email: validRegisterPayload.email,
+      email: validCredentials.email,
       password: 'wrong-password',
     })
 
@@ -72,11 +40,27 @@ test.group('Auth: login', (group) => {
 
     response.assertStatus(400)
   })
+
+  test('rejects login for a deactivated account', async ({ client }) => {
+    await User.create({
+      ...validCredentials,
+      email: 'inactive@example.com',
+      role: 'sales',
+      isActive: false,
+    })
+
+    const response = await client.post('/auth/login').json({
+      email: 'inactive@example.com',
+      password: validCredentials.password,
+    })
+
+    response.assertStatus(403)
+  })
 })
 
 test.group('Auth: me + logout', (group) => {
   group.each.setup(async () => {
-    await User.create({ ...validRegisterPayload, role: 'sales' })
+    await User.create({ ...validCredentials, role: 'sales' })
   })
 
   test('rejects /me without a token', async ({ client }) => {
@@ -87,21 +71,21 @@ test.group('Auth: me + logout', (group) => {
 
   test('returns the current user for a valid token', async ({ client }) => {
     const login = await client.post('/auth/login').json({
-      email: validRegisterPayload.email,
-      password: validRegisterPayload.password,
+      email: validCredentials.email,
+      password: validCredentials.password,
     })
     const token = login.body().token as string
 
     const response = await client.get('/auth/me').header('Authorization', `Bearer ${token}`)
 
     response.assertStatus(200)
-    response.assertBodyContains({ email: validRegisterPayload.email })
+    response.assertBodyContains({ email: validCredentials.email })
   })
 
   test('logout revokes the token so it can no longer be used', async ({ client }) => {
     const login = await client.post('/auth/login').json({
-      email: validRegisterPayload.email,
-      password: validRegisterPayload.password,
+      email: validCredentials.email,
+      password: validCredentials.password,
     })
     const token = login.body().token as string
 

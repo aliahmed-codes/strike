@@ -16,7 +16,10 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare id: number
 
   @column()
-  declare fullName: string | null
+  declare firstName: string
+
+  @column()
+  declare lastName: string
 
   @column()
   declare email: string
@@ -26,6 +29,15 @@ export default class User extends compose(BaseModel, AuthFinder) {
 
   @column()
   declare role: 'admin' | 'sales' | 'viewer'
+
+  @column()
+  declare isActive: boolean
+
+  @column()
+  declare phone: string | null
+
+  @column()
+  declare timezone: string
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
