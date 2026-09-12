@@ -1,48 +1,13 @@
 {
   "info": {
-    "name": "PriceFRAME API",
-    "description": "API collection for the PriceFRAME cross-border pricing/quoting engine. Import the accompanying \"PriceFRAME - Local\" environment alongside this collection and select it before sending requests.",
+    "name": "STRIKE API",
+    "description": "API collection for STRIKE, the cross-border pricing/quoting engine. Import the accompanying \"STRIKE - Local\" environment alongside this collection and select it before sending requests.\n\nThere is no public registration endpoint — accounts are created by an admin (eventually via the admin dashboard; for now, run `node ace create:user` in apps/server to create a login for testing this collection).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
       "name": "Auth",
       "item": [
-        {
-          "name": "Register",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"fullName\": \"Ada Lovelace\",\n  \"email\": \"ada@example.com\",\n  \"password\": \"password123\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/auth/register",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "register"]
-            },
-            "description": "Creates a new user account and immediately logs them in. Returns the user's public info and a bearer token valid for 30 days.\n\nFails with 409 if the email is already registered, or 422 if the input is invalid."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    const body = pm.response.json();",
-                  "    pm.environment.set('token', body.token);",
-                  "    pm.test('Response contains a token', () => pm.expect(body.token).to.be.a('string'));",
-                  "    pm.test('Response does not contain the password', () => pm.expect(body.user).to.not.have.property('password'));",
-                  "} else {",
-                  "    pm.test('Register did not return 201 (email likely already registered — try Login instead, or change the email in the request body)', () => {});",
-                  "}"
-                ]
-              }
-            }
-          ]
-        },
         {
           "name": "Login",
           "request": {
@@ -86,7 +51,7 @@
               "host": ["{{base_url}}"],
               "path": ["auth", "me"]
             },
-            "description": "Returns the currently authenticated user, identified by the bearer token saved from Register/Login.\n\nFails with 401 if the token is missing, invalid, or has been logged out."
+            "description": "Returns the currently authenticated user, identified by the bearer token saved from Login.\n\nFails with 401 if the token is missing, invalid, or has been logged out."
           },
           "event": [
             {
