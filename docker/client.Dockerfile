@@ -11,7 +11,7 @@ RUN npm install
 FROM base AS build
 COPY packages/shared packages/shared
 COPY apps/client apps/client
-RUN npm run build --workspace=@pricingframe/shared
+RUN npm run build --workspace=@strike/shared
 RUN npm run build --workspace=client
 
 FROM nginx:1.27-alpine AS runtime

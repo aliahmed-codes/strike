@@ -22,14 +22,14 @@ RUN npm install --omit=dev
 FROM deps AS build
 COPY packages/shared packages/shared
 COPY apps/server apps/server
-RUN npm run build --workspace=@pricingframe/shared
+RUN npm run build --workspace=@strike/shared
 RUN npm run build --workspace=server
 
 FROM node:22-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Production node_modules (workspace-aware, so the @pricingframe/shared
+# Production node_modules (workspace-aware, so the @strike/shared
 # symlink below resolves correctly).
 COPY --from=deps-prod /app/node_modules ./node_modules
 COPY --from=deps-prod /app/package.json ./package.json

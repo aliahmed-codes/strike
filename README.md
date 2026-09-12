@@ -1,4 +1,4 @@
-# PriceFRAME
+# STRIKE
 
 A cross-border payment pricing/quoting engine — build a quote, price its corridors, and see revenue/margin/take-rate instantly.
 
