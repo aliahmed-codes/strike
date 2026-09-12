@@ -1,5 +1,5 @@
 export interface AuthUser {
-  id: string
+  id: number
   fullName: string
   email: string
   role: 'admin' | 'sales' | 'viewer'
@@ -19,5 +19,5 @@ export interface RegisterPayload {
 export interface AuthSession {
   user: AuthUser
   token: string
-  expiresAt: string
+  expiresAt: string | null
 }

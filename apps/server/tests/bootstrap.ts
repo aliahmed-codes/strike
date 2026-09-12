@@ -33,10 +33,10 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
  */
 export const configureSuite: Config['configureSuite'] = (suite) => {
   if (['browser', 'functional', 'e2e'].includes(suite.name)) {
-    return suite.setup(() => testUtils.httpServer().start())
+    suite.setup(() => testUtils.httpServer().start())
   }
 
   if (suite.name === 'functional') {
-    suite.setup(() => testUtils.db().truncate())
+    suite.onGroup((group) => group.each.setup(() => testUtils.db().truncate()))
   }
 }
