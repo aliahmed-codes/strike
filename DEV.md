@@ -82,13 +82,22 @@ Do not start step 3 before step 2 is green. Do not start the next feature before
 - Backend: [Japa](https://japa.dev/) (`@japa/runner`), already configured by the AdonisJS starter kit. Run with `cd apps/server && npm run test`. Put HTTP-level tests under `tests/functional/`, unit tests under `tests/unit/`.
 - Frontend: a test plan for now is a short, explicit written checklist (steps to perform + expected result) executed manually and recorded in the PR/commit description; introduce an automated frontend test runner (e.g. Vitest + Testing Library) once there's enough UI complexity to justify it — track that decision as its own FEATURES.md item when it comes up, don't add it silently.
 
-## 6. Docker (once FEATURES.md item #2 is built)
+## 6. Docker
+
+The whole stack (Postgres, the AdonisJS server, the React client) runs with one command:
 
 ```bash
+cp .env.example .env    # once — sets Postgres creds + APP_KEY for docker-compose
 docker compose up --build
 ```
 
-This will bring up Postgres, the AdonisJS server, and the React client together. Until then, run Postgres locally or via `docker run postgres` yourself and point `apps/server/.env` at it.
+- Client: http://localhost:5173 (nginx, proxies `/api/*` to the server)
+- Server: http://localhost:3333
+- Postgres: localhost:5432
+
+Migrations run automatically every time the server container starts (see `docker/server.Dockerfile`'s `CMD`) — you don't need to run them by hand. `docker compose down` stops everything; add `-v` to also drop the Postgres data volume.
+
+This is separate from your local (non-Docker) `apps/server/.env` — that file is for running the server directly with `npm run dev` against whatever Postgres you have locally. The root `.env` (from `.env.example`) is only read by `docker-compose.yml`.
 
 ## 7. Git workflow
 
@@ -123,10 +132,13 @@ cd apps/client && npm run dev   # starts on http://localhost:5173
 # "PriceFRAME" card with a working button (confirms Tailwind + shadcn wiring)
 ```
 
-Postgres isn't required yet to verify this stage — the server boots and serves HTTP without a live database connection; a real DB is only needed once migrations run (starting with authentication, item #3).
+Postgres isn't required to verify this stage — the server boots and serves HTTP without a live database connection. It is required from here on (item #3 onward); either run the Docker stack (§6) or point `apps/server/.env` at a local Postgres instance.
 
 ## 9. Known tooling quirks (read before you hit these yourself)
 
 - **Working directory has a space in it** (`D:\buy-frame\new strike`). The `shadcn` CLI (`npx shadcn@latest add ...`) has a bug where it sometimes writes generated files to a literal `./@/...` folder instead of resolving the `@/*` alias to `src/`, specifically in paths containing a space. If you see a stray `@/` directory appear after running `shadcn add`, move its contents into the matching `src/` subfolder and delete the `@/` directory — don't assume the files aren't needed.
 - `create-adonisjs@latest` requires Node 24+; this project scaffolded the server with `create-adonisjs@2.4.1`, which supports the `--kit=api --db=postgres --auth-guard=access_tokens` flags on Node 22. If re-scaffolding anything, check the installed Node version first.
 - TypeScript 6's `tsconfig` no longer wants `baseUrl` alongside `paths` (it's deprecated) — path aliases should be declared as just `"paths": { "@/*": ["./src/*"] }` without `baseUrl`.
+- **Docker images must not `npm ci` from the committed lockfile.** `package-lock.json` is generated on Windows, and several deps (`@swc/core`, `rolldown`, etc.) ship platform-specific native binaries as optional dependencies. `npm ci` trusts the lockfile literally and won't fetch the Linux binary inside the container, so both Dockerfiles intentionally only copy `package.json` files (not the lockfile) and run `npm install`, letting npm re-resolve the right binaries for Linux. See the comments in `docker/server.Dockerfile`.
+- **nginx's automatic `proxy_pass` prefix-stripping is unreliable — use an explicit `rewrite`.** `docker/nginx.conf`'s `/api/` location uses `rewrite ^/api/(.*)$ /$1 break;` before `proxy_pass http://server:3333;` rather than relying on `proxy_pass http://server:3333/;` to strip the `/api/` prefix automatically — the latter did not strip it in testing.
+- **On Windows, `localhost` can resolve to `::1` (IPv6) and hit the wrong process** if something else is also bound to the same port on IPv6 only (e.g. a leftover `vite dev` process). If a port seems to be serving stale content, check `netstat -ano | grep <port>` for more than one listener and test with `127.0.0.1` explicitly to bypass the ambiguity.

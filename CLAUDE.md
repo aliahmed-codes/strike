@@ -85,4 +85,4 @@ We use AdonisJS's built-in **access_tokens** auth guard: a user logs in with ema
 
 ## 8. Current status
 
-See [FEATURES.md](./FEATURES.md) for the authoritative, up-to-date status. As of this writing: the project docs and the monorepo setup (items #0 and #1) are done and committed (`chore: monorepo setup`). Docker (#2) and authentication (#3) have not been started yet — authentication is next.
+See [FEATURES.md](./FEATURES.md) for the authoritative, up-to-date status. As of this writing: project docs, monorepo setup, and Docker (items #0–#2) are done and committed. Authentication (#3) is next.
