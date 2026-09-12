@@ -33,10 +33,12 @@ This is a **from-scratch rebuild** of an earlier codebase (referred to below as 
 | Database | PostgreSQL | Industry standard for relational, transactional data with strong JSON support (useful for things like tiered-pricing breakpoints later). |
 | Auth | AdonisJS `@adonisjs/auth` with the **access_tokens** guard | Standard, well-tested token auth. We do **not** reinvent auth with hand-rolled JWTs + a parallel sessions table the way the old project did (see §5). |
 | Frontend | React + Vite + TypeScript | Fast dev loop, no framework magic, full control. |
+| Server-state management | TanStack Query | Handles all data fetched from the API (auth session, quotes, etc.) — caching, loading/error states, refetching. No separate client-state library (e.g. Zustand/Redux) is used; UI-only state (a modal being open, a form step) stays local to components via `useState`/`useReducer`/Context. Revisit only if cross-component client-only state genuinely becomes painful — add it as a deliberate decision (and update this table), not silently. |
 | Styling | Tailwind CSS v4 | Utility-first, themeable via CSS variables, no hand-written random CSS. |
 | Component layer | shadcn/ui pattern (Radix primitives + `class-variance-authority` + the `cn` utility), copied into `apps/client/src/components/ui` | We **own** these components (they're not a black-box npm dependency) so they can be themed and extended consistently. All new UI must reuse these primitives instead of one-off styled elements. |
 | Monorepo tooling | npm workspaces + Turborepo | Single install, shared scripts, cached/parallel builds across `apps/*` and `packages/*`. |
 | Shared code | `packages/shared` | TypeScript types/DTOs shared between server and client (e.g. `Quote`, `AuthUser`) so the two apps can't silently drift out of sync. |
+| Backend testing | Japa (`@japa/runner`, `@japa/api-client`, `@japa/plugin-adonisjs`) | The official AdonisJS test runner, already wired by the starter kit (`apps/server/tests/bootstrap.ts`). `@japa/plugin-adonisjs` boots the real app (DB, container bindings) inside tests and `@japa/api-client` issues real HTTP requests against real routes — not something we chose generically, it's what AdonisJS's own tooling (`testUtils.db().migrate()/truncate()`) is built around. |
 | Containerization | Docker + docker-compose | One-command spin-up (Postgres + server + client) on any machine. |
 
 ## 4. Repository layout
