@@ -17,6 +17,10 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3333',
         changeOrigin: true,
+        // Strip the /api prefix so a call to /api/auth/login reaches the
+        // server's /auth/login route — matches docker/nginx.conf's rewrite,
+        // so the client's API paths behave the same in dev and in Docker.
+        rewrite: (requestPath) => requestPath.replace(/^\/api/, ''),
       },
     },
   },
