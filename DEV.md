@@ -47,16 +47,16 @@ Import paths use AdonisJS's subpath imports (`#controllers/*`, `#models/*`, etc.
 
 ### `packages/shared`
 
-Plain TypeScript, compiled with `tsc` to `dist/`. Both apps import from `@pricingframe/shared`. Run `npm run build` (or `--watch`/`dev`) here after changing a type so consumers pick it up. If you add a new domain concept, define its shared shape here and its meaning in CLAUDE.md's glossary.
+Plain TypeScript, compiled with `tsc` to `dist/`. Both apps import from `@strike/shared`. Run `npm run build` (or `--watch`/`dev`) here after changing a type so consumers pick it up. If you add a new domain concept, define its shared shape here and its meaning in CLAUDE.md's glossary.
 
 ## 3. Getting started
 
 ```bash
 npm install                # installs all workspaces from the repo root
-npm run dev                # (once Turborepo pipeline exists) runs server + client together
+npm run dev                # runs server + client together via Turborepo
 ```
 
-Until the Turborepo root scripts exist (see FEATURES.md item #1), run each app individually:
+Or run each app individually if you only need one:
 
 ```bash
 cd apps/server && npm run dev     # http://localhost:3333
@@ -64,6 +64,14 @@ cd apps/client && npm run dev     # http://localhost:5173 (proxies /api to :3333
 ```
 
 Copy `apps/server/.env.example` to `apps/server/.env` and fill in real values (database credentials, `APP_KEY`, etc.) before running the server.
+
+**Creating your first user:** there is no public registration page — this product is admin-only account creation (an admin dashboard for this is tracked as FEATURES.md item #7). Until that exists, create a user from the command line:
+
+```bash
+cd apps/server
+node ace create:user --email=you@example.com --first-name=Your --last-name=Name --password=your-password --role=sales
+# or just run `node ace create:user` with no flags to be prompted interactively
+```
 
 ## 4. The build process for every feature (read FEATURES.md first)
 
@@ -106,17 +114,17 @@ This is separate from your local (non-Docker) `apps/server/.env` — that file i
 
 A ready-to-import Postman collection lives in `postman/`:
 
-- `PriceFRAME.postman_collection.json` — the requests, organized by feature (currently just `Auth`: Register, Login, Me, Logout).
-- `PriceFRAME.postman_environment.json` — a `base_url` (`http://localhost:3333`) and a `token` variable.
+- `STRIKE.postman_collection.json` — the requests, organized by feature (currently just `Auth`: Register, Login, Me, Logout).
+- `STRIKE.postman_environment.json` — a `base_url` (`http://localhost:3333`) and a `token` variable.
 
-**To use it:** in Postman, File → Import both files, then select the "PriceFRAME - Local" environment from the environment dropdown (top right) before sending requests. Register and Login have a test script that automatically saves the returned token into the `token` environment variable, so Me and Logout (which send `Authorization: Bearer {{token}}`) work immediately afterward with no manual copying.
+**To use it:** in Postman, File → Import both files, then select the "STRIKE - Local" environment from the environment dropdown (top right) before sending requests. Register and Login have a test script that automatically saves the returned token into the `token` environment variable, so Me and Logout (which send `Authorization: Bearer {{token}}`) work immediately afterward with no manual copying.
 
 Point `base_url` at whichever server you're running against (local `npm run dev`, or the Docker stack — both listen on :3333 by default). As new features add endpoints, add them to this collection in their own folder (e.g. a future "Quotes" folder), following the same pattern: use `{{base_url}}`, and add test scripts for anything a later request depends on (like a saved token or an ID).
 
 To verify the whole collection still works from the command line (useful before a demo, or in CI later), run it headlessly with [Newman](https://www.npmjs.com/package/newman):
 
 ```bash
-npx newman run postman/PriceFRAME.postman_collection.json -e postman/PriceFRAME.postman_environment.json
+npx newman run postman/STRIKE.postman_collection.json -e postman/STRIKE.postman_environment.json
 ```
 
 ## 8. Git workflow
@@ -148,8 +156,8 @@ curl http://localhost:3333      # should return {"hello":"world"}
 
 ```bash
 cd apps/client && npm run dev   # starts on http://localhost:5173
-# open http://localhost:5173 in a browser — you should see a shadcn-styled
-# "PriceFRAME" card with a working button (confirms Tailwind + shadcn wiring)
+# open http://localhost:5173 in a browser — you should see the STRIKE login
+# page, built from the shadcn components (confirms Tailwind + shadcn wiring)
 ```
 
 Postgres isn't required to verify this stage — the server boots and serves HTTP without a live database connection. It is required from here on (item #3 onward); either run the Docker stack (§6) or point `apps/server/.env` at a local Postgres instance.
@@ -162,3 +170,5 @@ Postgres isn't required to verify this stage — the server boots and serves HTT
 - **Docker images must not `npm ci` from the committed lockfile.** `package-lock.json` is generated on Windows, and several deps (`@swc/core`, `rolldown`, etc.) ship platform-specific native binaries as optional dependencies. `npm ci` trusts the lockfile literally and won't fetch the Linux binary inside the container, so both Dockerfiles intentionally only copy `package.json` files (not the lockfile) and run `npm install`, letting npm re-resolve the right binaries for Linux. See the comments in `docker/server.Dockerfile`.
 - **nginx's automatic `proxy_pass` prefix-stripping is unreliable — use an explicit `rewrite`.** `docker/nginx.conf`'s `/api/` location uses `rewrite ^/api/(.*)$ /$1 break;` before `proxy_pass http://server:3333;` rather than relying on `proxy_pass http://server:3333/;` to strip the `/api/` prefix automatically — the latter did not strip it in testing.
 - **On Windows, `localhost` can resolve to `::1` (IPv6) and hit the wrong process** if something else is also bound to the same port on IPv6 only (e.g. a leftover `vite dev` process). If a port seems to be serving stale content, check `netstat -ano | grep <port>` for more than one listener and test with `127.0.0.1` explicitly to bypass the ambiguity.
+- **A native Postgres install and the Docker Postgres container both default to port 5432 — only one can actually be listening at a time.** If you have Postgres installed natively (e.g. as a Windows service) *and* run `docker compose up`, whichever one is running when the other tries to start will win the port; the other's container/service will fail to bind, or — more confusingly — your app may connect to whichever one happens to be up, silently giving inconsistent data depending on which was started last. Run `netstat -ano | grep :5432` and check with `Get-Process -Id <pid>` if data looks wrong or missing; don't assume `localhost:5432` always means the same database. Pick one Postgres to use locally (native or Docker) rather than running both.
+- **A workspace package's compiled types can go stale in a dependent app's `tsc -b` incremental cache.** After changing a type in `packages/shared/src/`, running `npm run build` there updates `dist/`, but `apps/client`'s `tsc -b` may not notice (it only tracks its own project's files closely, not a `node_modules` dependency's content). If a type change in `packages/shared` doesn't seem to take effect in the client, delete `apps/client/node_modules/.tmp` (and `.turbo/` at the repo root) and rebuild.

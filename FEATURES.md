@@ -32,7 +32,8 @@ If a stage fails, fix it and re-run that stage's tests — don't skip ahead.
 | 0 | Project docs (CLAUDE.md, DEV.md, FEATURES.md, README.md) | ✔ | Committed alongside item #1. |
 | 1 | Monorepo setup (npm workspaces + Turborepo, `apps/server` AdonisJS, `apps/client` React/Vite, `packages/shared`, Tailwind v4 + shadcn/ui in client) | ✔ | Root `package.json`/`turbo.json` added; `turbo run build` and `turbo run typecheck` pass across all 3 workspaces; server boots and responds on :3333; client builds. Committed as `chore: monorepo setup`. |
 | 2 | Docker setup (Postgres + server + client, `docker-compose.yml`, Dockerfiles) | ✔ | `docker compose up` builds and runs all 3 services; verified: Postgres healthy, server auto-runs migrations and responds on :3333, client (nginx) serves the app and proxies `/api/*` to the server on :5173. Committed as `chore: add Docker setup`. |
-| 3 | Authentication (register, login, logout, session/token refresh, "who am I") | ▶ | Priority feature — needed for the Monday client demo. Backend done: register/login/logout/me endpoints, 9 passing Japa tests, Postman collection, manually tested and confirmed by the user. Frontend (login/register UI) not started yet. |
+| 3 | Authentication (login, logout, "who am I") | ✔ | Priority feature — needed for the Monday client demo. There is **no public self-registration** — see item #7. Backend: login/logout/me endpoints + `create:user` ace command, 11 passing Japa tests (includes a deactivated-account check). Frontend: login page (Thunes branding, navy theme), session persistence, protected home route. `users` table aligned with the old schema's cheap/low-risk fields (see "Users table: schema alignment" below). Postman collection updated. Manually tested and confirmed by the user. |
+| 7 | Admin: create & manage users (replaces the interim `create:user` command) | ☐ | High priority — start this before/alongside Quoting. There is no self-service registration in this product (confirmed against the old app): an admin creates every account. In the old app: admin picks email/full name/role/profile, **sets the initial password directly**, the system emails the new user a welcome message with the login URL and that temporary password, and the user changes it later via the normal forgot-password flow (a separate, already-scoped-out feature). Needs: a `user.create`-style permission check (ties into item #5), an admin-only `POST /users`-style endpoint, and an admin UI (a simple table + "Add user" form is enough for v1 — no need to replicate the old app's full profile/manager fields yet). Until this ships, `node ace create:user` (see DEV.md) is the only way to create an account. |
 | 4 | Quoting — MVP (create a quote, add corridors, compute pricing, list/view quotes) | ☐ | Priority feature — needed for the Monday client demo. Scope to be narrowed further when we start it; see "Quoting MVP scope" below. |
 | 5 | Roles & permissions (admin / sales / viewer) | ☐ | Deferred until after the demo unless the client asks for it. |
 | 6 | Corridor catalog & tiered/volume pricing | ☐ | Deferred — old project's "quote_aggregates" / "tiered fields" concepts, redesigned cleanly (see CLAUDE.md domain glossary for the naming fix). |
@@ -43,7 +44,7 @@ If a stage fails, fix it and re-run that stage's tests — don't skip ahead.
 - [ ] Models/relationships implemented
 - [ ] Endpoints implemented with input validation
 - [ ] Backend tests written for each endpoint (success + at least one failure case) and passing
-- [ ] New endpoints added to the Postman collection (`postman/PriceFRAME.postman_collection.json`), with a test script for anything a later request depends on (e.g. a saved token or ID)
+- [ ] New endpoints added to the Postman collection (`postman/STRIKE.postman_collection.json`), with a test script for anything a later request depends on (e.g. a saved token or ID)
 - [ ] Frontend UI implemented against the real API (no mocked data left behind)
 - [ ] Frontend test plan written, executed, and passing
 - [ ] FEATURES.md status updated to `✔`
@@ -56,9 +57,26 @@ Before this item can be marked `✔`, the following must all be true and verifie
 - [x] Root `package.json` defines npm workspaces (`apps/*`, `packages/*`) and a `turbo.json` pipeline for `dev`/`build`/`lint`/`typecheck`/`test`
 - [x] `apps/server` runs (`npm run dev`) and responds on its port (verified: `GET /` → `{"hello":"world"}` on :3333)
 - [x] `apps/client` runs (`npm run dev`), builds (`npm run build`), and renders the shadcn-based placeholder page
-- [x] `packages/shared` builds and typechecks cleanly, and is linked as a workspace dependency so both apps *can* import `@pricingframe/shared` — it isn't imported by real app code yet since no feature needs it until authentication starts
+- [x] `packages/shared` builds and typechecks cleanly, and is linked as a workspace dependency so both apps can import `@strike/shared` — now actually used by the client's auth hooks (`AuthUser`, `AuthSession`, `LoginPayload`, `RegisterPayload`)
 - [x] Root `.gitignore`, `.editorconfig`, and shared lint/format config exist
 - [x] Everything above is committed in one commit: `chore: monorepo setup` (`047e369`)
+
+## Users table: schema alignment with the old system
+
+To avoid a painful data migration later, the `users` table was checked column-by-column against the old app's actual schema (`priceframe_schema.sql` / `1746000000001_create_identity_system.ts`) and deliberately adopted the fields that are cheap now and costly to add later:
+
+**Adopted now:**
+- `first_name` + `last_name` (split, matching the old schema) instead of a single `full_name` — splitting a name after the fact is lossy; done via a proper migration with a backfill, not a data-dropping rewrite.
+- `is_active` (boolean, default true) — and it's actually **enforced**: login rejects a deactivated account with 403. A schema column with no behavior behind it isn't worth adding.
+- `phone` (nullable) and `timezone` (default `UTC`) — harmless, commonly needed regardless of the old system.
+
+**Deliberately NOT adopted** (would reintroduce complexity CLAUDE.md already says to defer until there's a real need):
+- Normalized `roles` and `profiles` **tables** with hierarchy (`parent_role_id`) — we use a simple `role` enum instead (see CLAUDE.md's auth model). If/when item #5 (roles & permissions) needs more than 3 fixed roles, revisit this as its own decision.
+- `manager_id`, `created_by`/`modified_by` audit columns, `deleted_at` soft-delete — no feature needs these yet.
+- Account lockout fields (`failed_attempts`, `is_locked`, `locked_at`) and MFA fields (`mfa_enabled`, `mfa_secret`, etc.) — real security features, but nothing has asked for them yet; add the columns *when* that feature is actually built, not speculatively.
+- Firebase/SSO fields (`firebase_uid`, `auth_provider`, `firebase_email`) — no SSO requirement exists for this rebuild.
+
+If a future data-import task needs any of the "not adopted" fields, that's the point to add them — as their own scoped feature with its own migration, not retrofitted quietly.
 
 ## Quoting MVP scope (for when item #4 starts)
 
