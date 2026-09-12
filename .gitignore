@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Env files (never commit real secrets)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# AdonisJS
+apps/server/tmp/
+apps/server/var/
+
+# Vite
+apps/client/dist/
+
+# Turborepo
+.turbo/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
