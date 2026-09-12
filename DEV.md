@@ -41,8 +41,8 @@ Import paths use AdonisJS's subpath imports (`#controllers/*`, `#models/*`, etc.
 ### `apps/client` (React)
 
 - `src/components/ui/` — the shadcn-style component primitives (Button, Card, Input, Label, …). These are **owned code**, not a black-box dependency — edit them directly when the design system needs to change, but changes here affect every feature, so they should be deliberate.
-- `src/features/<name>/` — one folder per feature (e.g. `src/features/auth`, `src/features/quotes`), containing that feature's pages, components, hooks, and API calls. Don't reach into another feature's internals — share through `packages/shared` types or `src/lib`.
-- `src/lib/` — cross-cutting utilities (e.g. `cn()` class-merging helper, the API client).
+- `src/features/<name>/` — one folder per feature (e.g. `src/features/auth`, `src/features/quotes`), containing that feature's pages, components, and a set of custom hooks per resource (e.g. `useLogin`, `useRegister`, `useMe`) that wrap TanStack Query + the shared axios instance. **Components call these hooks, never `axios`/the API client directly** — that's the one place a resource's URLs, error shaping, and cache invalidation live. Don't reach into another feature's internals — share through `packages/shared` types or `src/lib`.
+- `src/lib/` — cross-cutting utilities: `cn()` class-merging helper, `api-client.ts` (the one configured axios instance, with an interceptor that attaches the auth token), `token-storage.ts` (the one place that reads/writes the auth token in `localStorage` — components don't call `localStorage` directly; they read "who's logged in" via the `useMe()` query instead).
 - Path alias: `@/*` maps to `src/*` (configured in `tsconfig.app.json` and `vite.config.ts`).
 
 ### `packages/shared`
@@ -69,7 +69,7 @@ Copy `apps/server/.env.example` to `apps/server/.env` and fill in real values (d
 
 Short version — full detail is in FEATURES.md:
 
-0. State the plan for the step (what's being built, what will be tested) before writing code.
+0. State the plan for the step (what's being built, what will be tested) before writing code — and if there's more than one reasonable way to build a piece of it, ask which one instead of picking silently.
 1. Backend (migration → model → validator → controller → route) for the feature.
 2. Backend tests for every endpoint added. Run `npm run test` in `apps/server` — must pass.
 3. Frontend for the feature, wired to the real API (no mock data left in place).

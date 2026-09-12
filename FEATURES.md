@@ -8,7 +8,7 @@ Read this file together with [CLAUDE.md](./CLAUDE.md) (project context) and [DEV
 
 We do not build several things in parallel or in one long unattended stretch. For every feature in the backlog below, work happens in this exact order, and each stage gate must pass before the next one starts:
 
-0. **Plan first.** Before writing any code for the step, state the approach (what will be built, which files/endpoints, what will be tested) and get a go-ahead. Don't skip straight to implementation just because the next item is obvious from the backlog.
+0. **Plan first.** Before writing any code for the step, state the approach (what will be built, which files/endpoints, what will be tested) and get a go-ahead. Don't skip straight to implementation just because the next item is obvious from the backlog. If there's more than one reasonable way to build a piece of it, ask which one instead of picking silently.
 1. **Backend first.** Build the API for the feature (migrations, models, controllers/services, routes, validation).
 2. **Backend tests.** Write test cases for every endpoint the feature adds (happy path + key failure paths). Run them. They must pass.
 3. **Frontend.** Only after step 2 is green, build the UI for the feature against the real API.
