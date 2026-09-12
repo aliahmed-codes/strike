@@ -8,11 +8,14 @@ Read this file together with [CLAUDE.md](./CLAUDE.md) (project context) and [DEV
 
 We do not build several things in parallel or in one long unattended stretch. For every feature in the backlog below, work happens in this exact order, and each stage gate must pass before the next one starts:
 
+0. **Plan first.** Before writing any code for the step, state the approach (what will be built, which files/endpoints, what will be tested) and get a go-ahead. Don't skip straight to implementation just because the next item is obvious from the backlog.
 1. **Backend first.** Build the API for the feature (migrations, models, controllers/services, routes, validation).
 2. **Backend tests.** Write test cases for every endpoint the feature adds (happy path + key failure paths). Run them. They must pass.
 3. **Frontend.** Only after step 2 is green, build the UI for the feature against the real API.
 4. **Test plan.** Write a short manual (or automated, where practical) test plan for the frontend flow, execute it, and confirm it passes.
-5. **Commit.** Once backend + tests + frontend + test plan all pass, create a git commit for that feature. **Do not start the next feature before this commit exists.**
+5. **Explain it.** After finishing a step (or a meaningful chunk of one), give a complete, plain-language summary of what was actually built and how it works — enough for a non-implementer to fully understand what changed, not just "tests passed."
+6. **The user tests it personally.** Automated tests passing is necessary but not sufficient. Wait for the user to try it themselves and confirm it's good.
+7. **Commit.** Only once backend + tests + frontend + test plan all pass **and the user has personally confirmed it works**, create a git commit for that feature. **Do not start the next feature before this commit exists.**
 
 If a stage fails, fix it and re-run that stage's tests — don't skip ahead.
 
@@ -40,6 +43,7 @@ If a stage fails, fix it and re-run that stage's tests — don't skip ahead.
 - [ ] Models/relationships implemented
 - [ ] Endpoints implemented with input validation
 - [ ] Backend tests written for each endpoint (success + at least one failure case) and passing
+- [ ] New endpoints added to the Postman collection (`postman/PriceFRAME.postman_collection.json`), with a test script for anything a later request depends on (e.g. a saved token or ID)
 - [ ] Frontend UI implemented against the real API (no mocked data left behind)
 - [ ] Frontend test plan written, executed, and passing
 - [ ] FEATURES.md status updated to `✔`

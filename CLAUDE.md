@@ -17,11 +17,14 @@ This is a **from-scratch rebuild** of an earlier codebase (referred to below as 
 
 **This is the most important section for an AI assistant to internalize.** The developer has explicitly asked for step-by-step, reviewable progress — not large unattended batches of work.
 
+- **Plan before coding.** Before writing any implementation for a step, state the approach (what will be built, which endpoints/files, what will be tested) and get a go-ahead — even when the next step is obvious from FEATURES.md.
 - **One step at a time.** Do not scaffold, implement, or wire up multiple unrelated pieces in a single pass. Finish and get confirmation on one thing before starting the next.
 - **Follow [FEATURES.md](./FEATURES.md).** It lists every feature, its status, and the current priority order. Do not start work that isn't tracked there — add an entry first.
 - **Backend before frontend, every time.** For any feature: build the backend (migrations, models, controllers, validation) and write test cases for every endpoint it adds. Get those tests passing before writing a single line of frontend code for that feature.
 - **Test plan before moving on.** Once the frontend for a feature is built against the real (non-mocked) API, write and execute a test plan for it. It must pass before starting the next feature.
-- **Commit after each completed feature.** A feature is "done" only once backend tests pass, frontend works against the real API, and its test plan passes. At that point, commit it to git with a clear message. **Never start the next feature on top of an uncommitted one.**
+- **Explain what was built.** After finishing a step, give a complete, plain-language summary of what was actually built and how it works — the user is building this project through AI assistance but wants to remain a fully-informed developer, not just receive finished code.
+- **The user tests it personally before any commit.** Automated tests passing (Japa, typecheck, build) is necessary but never sufficient on its own — wait for the user to try the change themselves and explicitly confirm it, every time, before committing.
+- **Commit only after that confirmation.** A feature is "done" once backend tests pass, frontend works against the real API, its test plan passes, **and the user has personally confirmed it**. Only then commit it to git with a clear message. **Never start the next feature on top of an uncommitted one, and never commit on the strength of automated tests alone.**
 - If you're unsure whether something is in scope for the current step, stop and ask rather than expanding scope on your own.
 
 ## 3. Tech stack and why

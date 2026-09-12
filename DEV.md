@@ -5,7 +5,7 @@ Practical guide for a human developer working on this repo day-to-day. For the "
 ## 1. Prerequisites
 
 - Node.js 22+ and npm 10+
-- PostgreSQL (or use Docker — see §6, once it exists per FEATURES.md item #2)
+- PostgreSQL (or use Docker — see §6)
 - Git
 
 ## 2. Repository layout
@@ -69,13 +69,16 @@ Copy `apps/server/.env.example` to `apps/server/.env` and fill in real values (d
 
 Short version — full detail is in FEATURES.md:
 
+0. State the plan for the step (what's being built, what will be tested) before writing code.
 1. Backend (migration → model → validator → controller → route) for the feature.
 2. Backend tests for every endpoint added. Run `npm run test` in `apps/server` — must pass.
 3. Frontend for the feature, wired to the real API (no mock data left in place).
 4. A test plan for the frontend flow, executed and passing.
-5. `git commit` for the completed feature, referencing the FEATURES.md item.
+5. A plain-language summary of what was built and how it works — enough to fully understand the change, not just "tests passed."
+6. The developer tests the change personally and confirms it. Automated tests passing is not, by itself, a reason to commit.
+7. `git commit` for the completed feature, referencing the FEATURES.md item — only after that personal confirmation.
 
-Do not start step 3 before step 2 is green. Do not start the next feature before step 5.
+Do not start step 3 before step 2 is green. Do not commit before step 6. Do not start the next feature before step 7.
 
 ## 5. Testing
 
@@ -99,7 +102,24 @@ Migrations run automatically every time the server container starts (see `docker
 
 This is separate from your local (non-Docker) `apps/server/.env` — that file is for running the server directly with `npm run dev` against whatever Postgres you have locally. The root `.env` (from `.env.example`) is only read by `docker-compose.yml`.
 
-## 7. Git workflow
+## 7. Postman collection
+
+A ready-to-import Postman collection lives in `postman/`:
+
+- `PriceFRAME.postman_collection.json` — the requests, organized by feature (currently just `Auth`: Register, Login, Me, Logout).
+- `PriceFRAME.postman_environment.json` — a `base_url` (`http://localhost:3333`) and a `token` variable.
+
+**To use it:** in Postman, File → Import both files, then select the "PriceFRAME - Local" environment from the environment dropdown (top right) before sending requests. Register and Login have a test script that automatically saves the returned token into the `token` environment variable, so Me and Logout (which send `Authorization: Bearer {{token}}`) work immediately afterward with no manual copying.
+
+Point `base_url` at whichever server you're running against (local `npm run dev`, or the Docker stack — both listen on :3333 by default). As new features add endpoints, add them to this collection in their own folder (e.g. a future "Quotes" folder), following the same pattern: use `{{base_url}}`, and add test scripts for anything a later request depends on (like a saved token or an ID).
+
+To verify the whole collection still works from the command line (useful before a demo, or in CI later), run it headlessly with [Newman](https://www.npmjs.com/package/newman):
+
+```bash
+npx newman run postman/PriceFRAME.postman_collection.json -e postman/PriceFRAME.postman_environment.json
+```
+
+## 8. Git workflow
 
 - Commit only complete, tested features (see §4). No partial/broken commits on `main`.
 - **Keep commits minimal and scoped to one related change.** One commit = one feature/fix/chore, not a grab-bag of unrelated edits. Don't bundle "add auth" with an unrelated formatting pass or a different feature's docs update.
@@ -108,7 +128,7 @@ This is separate from your local (non-Docker) `apps/server/.env` — that file i
 - Reference the FEATURES.md item number in the commit or PR description when relevant.
 - Update FEATURES.md's status column (`☐` → `▶` → `✔`) as part of the same commit as the work it describes.
 
-## 8. Verifying the monorepo setup (item #1) locally
+## 9. Verifying the monorepo setup (item #1) locally
 
 There's no product feature to click through yet — this stage just proves the scaffold works. To check it yourself:
 
@@ -134,7 +154,7 @@ cd apps/client && npm run dev   # starts on http://localhost:5173
 
 Postgres isn't required to verify this stage — the server boots and serves HTTP without a live database connection. It is required from here on (item #3 onward); either run the Docker stack (§6) or point `apps/server/.env` at a local Postgres instance.
 
-## 9. Known tooling quirks (read before you hit these yourself)
+## 10. Known tooling quirks (read before you hit these yourself)
 
 - **Working directory has a space in it** (`D:\buy-frame\new strike`). The `shadcn` CLI (`npx shadcn@latest add ...`) has a bug where it sometimes writes generated files to a literal `./@/...` folder instead of resolving the `@/*` alias to `src/`, specifically in paths containing a space. If you see a stray `@/` directory appear after running `shadcn add`, move its contents into the matching `src/` subfolder and delete the `@/` directory — don't assume the files aren't needed.
 - `create-adonisjs@latest` requires Node 24+; this project scaffolded the server with `create-adonisjs@2.4.1`, which supports the `--kit=api --db=postgres --auth-guard=access_tokens` flags on Node 22. If re-scaffolding anything, check the installed Node version first.
