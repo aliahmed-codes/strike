@@ -93,11 +93,39 @@ This will bring up Postgres, the AdonisJS server, and the React client together.
 ## 7. Git workflow
 
 - Commit only complete, tested features (see §4). No partial/broken commits on `main`.
-- Write commit messages that describe *why*, e.g. `feat(auth): add login/register endpoints with token auth`, not `update files`.
-- Reference the FEATURES.md item number in the commit or PR description.
+- **Keep commits minimal and scoped to one related change.** One commit = one feature/fix/chore, not a grab-bag of unrelated edits. Don't bundle "add auth" with an unrelated formatting pass or a different feature's docs update.
+- **Commit messages are short — a single summary line**, Conventional-Commits style (`feat(auth): add login/register endpoints`, `fix(quotes): correct margin rounding`, `chore: monorepo setup`). Avoid long multi-paragraph commit bodies; if a change genuinely needs more explanation, put it in the PR description, not the commit message.
+- No AI co-author trailers or similar attribution lines in commit messages for this repo.
+- Reference the FEATURES.md item number in the commit or PR description when relevant.
 - Update FEATURES.md's status column (`☐` → `▶` → `✔`) as part of the same commit as the work it describes.
 
-## 8. Known tooling quirks (read before you hit these yourself)
+## 8. Verifying the monorepo setup (item #1) locally
+
+There's no product feature to click through yet — this stage just proves the scaffold works. To check it yourself:
+
+```bash
+npm install                 # from the repo root, once
+npx turbo run build         # builds server + client + shared — all 3 must succeed
+npx turbo run typecheck     # typechecks all 3 — must report no errors
+```
+
+Then run the apps and look at them directly:
+
+```bash
+cd apps/server && npm run dev   # starts on http://localhost:3333
+# in another terminal:
+curl http://localhost:3333      # should return {"hello":"world"}
+```
+
+```bash
+cd apps/client && npm run dev   # starts on http://localhost:5173
+# open http://localhost:5173 in a browser — you should see a shadcn-styled
+# "PriceFRAME" card with a working button (confirms Tailwind + shadcn wiring)
+```
+
+Postgres isn't required yet to verify this stage — the server boots and serves HTTP without a live database connection; a real DB is only needed once migrations run (starting with authentication, item #3).
+
+## 9. Known tooling quirks (read before you hit these yourself)
 
 - **Working directory has a space in it** (`D:\buy-frame\new strike`). The `shadcn` CLI (`npx shadcn@latest add ...`) has a bug where it sometimes writes generated files to a literal `./@/...` folder instead of resolving the `@/*` alias to `src/`, specifically in paths containing a space. If you see a stray `@/` directory appear after running `shadcn add`, move its contents into the matching `src/` subfolder and delete the `@/` directory — don't assume the files aren't needed.
 - `create-adonisjs@latest` requires Node 24+; this project scaffolded the server with `create-adonisjs@2.4.1`, which supports the `--kit=api --db=postgres --auth-guard=access_tokens` flags on Node 22. If re-scaffolding anything, check the installed Node version first.
