@@ -1,0 +1,46 @@
+import type { HttpContext } from '@adonisjs/core/http'
+import Region from '#models/region'
+import Country from '#models/country'
+import Currency from '#models/currency'
+import UseCase from '#models/use_case'
+import IntegrationType from '#models/integration_type'
+import IcpNode from '#models/icp_node'
+import Corridor from '#models/corridor'
+
+export default class ReferenceDataController {
+  async regions() {
+    return Region.query().orderBy('name')
+  }
+
+  async countries() {
+    return Country.query().orderBy('name')
+  }
+
+  async currencies() {
+    return Currency.query().orderBy('isoCode3')
+  }
+
+  async useCases() {
+    return UseCase.query().where('isActive', true).orderBy('label')
+  }
+
+  async integrationTypes() {
+    return IntegrationType.query().orderBy('name')
+  }
+
+  async icpNodes() {
+    return IcpNode.query().where('isActive', true).orderBy('level').orderBy('name')
+  }
+
+  async corridors({ request }: HttpContext) {
+    const { countryId, serviceCode, transactionTypeCode } = request.qs()
+
+    const query = Corridor.query().preload('country').preload('payoutCurrency')
+
+    if (countryId) query.where('countryId', countryId)
+    if (serviceCode) query.where('serviceCode', serviceCode)
+    if (transactionTypeCode) query.where('transactionTypeCode', transactionTypeCode)
+
+    return query.orderBy('id')
+  }
+}
