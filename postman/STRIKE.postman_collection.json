@@ -64,7 +64,200 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Reference Data",
+      "item": [
+        {
+          "name": "List Countries",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reference/countries",
+              "host": ["{{base_url}}"],
+              "path": ["reference", "countries"]
+            },
+            "description": "Read-only lookup data seeded from the old project's reference tables. Similar endpoints exist for /reference/regions, /currencies, /use-cases, /integration-types, and /icp-nodes."
+          }
         },
+        {
+          "name": "List Corridors (catalog)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reference/corridors",
+              "host": ["{{base_url}}"],
+              "path": ["reference", "corridors"]
+            },
+            "description": "The master corridor catalog a user picks from when adding a corridor to a quote. Supports optional ?countryId=&serviceCode=&transactionTypeCode= filters."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const corridors = pm.response.json();",
+                  "    if (corridors.length) pm.environment.set('corridor_id', corridors[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Quotes",
+      "item": [
+        {
+          "name": "Create Quote",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Habib Bank\"\n}" },
+            "url": { "raw": "{{base_url}}/quotes", "host": ["{{base_url}}"], "path": ["quotes"] },
+            "description": "Creates a new quote, owned by the current user, always starting in 'draft' status."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created (201)', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.environment.set('quote_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Quotes",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/quotes", "host": ["{{base_url}}"], "path": ["quotes"] },
+            "description": "Lists the current user's own quotes (an admin sees every quote)."
+          }
+        },
+        {
+          "name": "Show Quote",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}"]
+            },
+            "description": "Returns the full quote (with its corridors) plus backend-computed totals (revenue, margin, take rate) — the client never computes these itself."
+          }
+        },
+        {
+          "name": "Update Quote",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Habib Bank (Renamed)\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}"]
+            },
+            "description": "Only allowed while the quote is still in 'draft' status — fails with 409 once submitted."
+          }
+        },
+        {
+          "name": "Add Corridor to Quote",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"corridorId\": {{corridor_id}},\n  \"yearlyVolumeUsd\": 1000000,\n  \"yearlyTransactions\": 20000,\n  \"fixedFeeUsd\": 0.3,\n  \"variableFeePct\": 1.2,\n  \"appliedFxSpread\": 0.5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/corridors",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}", "corridors"]
+            },
+            "description": "Adds a corridor from the catalog to the quote. The backend computes revenue/margin/take-rate and flags needs_approval — none of that is trusted from the request body. Run \"List Corridors (catalog)\" first to populate {{corridor_id}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created (201)', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.environment.set('quote_corridor_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Quote Corridor",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"yearlyVolumeUsd\": 2000000\n}" },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/corridors/{{quote_corridor_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}", "corridors", "{{quote_corridor_id}}"]
+            },
+            "description": "Updates pricing inputs for a corridor already on the quote — the backend recomputes revenue/margin/take-rate from the merged values."
+          }
+        },
+        {
+          "name": "Remove Corridor from Quote",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/corridors/{{quote_corridor_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}", "corridors", "{{quote_corridor_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Quote",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}"]
+            },
+            "description": "Only allowed while the quote is still in 'draft' status."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "item": [
         {
           "name": "Logout",
           "request": {
@@ -75,7 +268,7 @@
               "host": ["{{base_url}}"],
               "path": ["auth", "logout"]
             },
-            "description": "Revokes the current bearer token. After this, the same token can no longer be used to call Me or Logout again (try Me again afterwards to confirm — it should return 401)."
+            "description": "Revokes the current bearer token. Deliberately placed last in the collection — every other request needs the token, so logging out too early breaks everything after it. Run this manually whenever you're done, don't rely on \"Run collection\" order alone unless this folder truly runs last."
           },
           "event": [
             {
