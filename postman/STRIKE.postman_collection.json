@@ -109,6 +109,27 @@
               }
             }
           ]
+        },
+        {
+          "name": "Corridor Facets",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reference/corridors/facets?regionId=&countryId=&serviceCode=&transactionTypeCode=&payoutCurrencyId=&payerCode=",
+              "host": ["{{base_url}}"],
+              "path": ["reference", "corridors", "facets"],
+              "query": [
+                { "key": "regionId", "value": "" },
+                { "key": "countryId", "value": "" },
+                { "key": "serviceCode", "value": "" },
+                { "key": "transactionTypeCode", "value": "" },
+                { "key": "payoutCurrencyId", "value": "" },
+                { "key": "payerCode", "value": "" }
+              ]
+            },
+            "description": "Powers the \"Corridors to Offer\" picker: per-dimension counts (regions, countries, services, transaction types, payout currencies, payers) plus totalAvailable/totalMatched, given any combination of the query filters. A dimension's own filter doesn't narrow its own counts (so the UI can show what picking something else would do), but it does narrow every other dimension's counts."
+          }
         }
       ]
     },
@@ -123,9 +144,12 @@
               { "key": "Content-Type", "value": "application/json" },
               { "key": "Authorization", "value": "Bearer {{token}}" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Habib Bank\"\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Habib Bank\",\n  \"opportunityType\": \"New partner\",\n  \"fundingCurrencyIds\": [1, 2],\n  \"sourceCurrencyIds\": [1],\n  \"useCaseIds\": [1]\n}"
+            },
             "url": { "raw": "{{base_url}}/quotes", "host": ["{{base_url}}"], "path": ["quotes"] },
-            "description": "Creates a new quote, owned by the current user, always starting in 'draft' status."
+            "description": "Creates a new quote, owned by the current user, always starting in 'draft' status.\n\nMost fields are optional besides name — this example shows the multi-value ones (a quote can have several funding/source currencies and use cases, matching the old app exactly). Other optional fields: partnerCountryId, integrationTypeId, icpLevel1Id/icpLevel2Id/icpLevel3Id, contractLengthYears, waivedMonths, partnerPrCode, showFxSourceInContract, showFxSpreadInContract, fxModel, selectedPricingStrategy, selectedFxPricing, defaultFeeCurrencyId. Currency/use-case ids depend on what's seeded — check \"List Countries\"/\"Currencies\" first if these don't exist in your database."
           },
           "event": [
             {
