@@ -34,7 +34,7 @@ If a stage fails, fix it and re-run that stage's tests — don't skip ahead.
 | 2 | Docker setup (Postgres + server + client, `docker-compose.yml`, Dockerfiles) | ✔ | `docker compose up` builds and runs all 3 services; verified: Postgres healthy, server auto-runs migrations and responds on :3333, client (nginx) serves the app and proxies `/api/*` to the server on :5173. Committed as `chore: add Docker setup`. |
 | 3 | Authentication (login, logout, "who am I") | ✔ | Priority feature — needed for the Monday client demo. There is **no public self-registration** — see item #7. Backend: login/logout/me endpoints + `create:user` ace command, 11 passing Japa tests (includes a deactivated-account check). Frontend: login page (Thunes branding, navy theme), session persistence, protected home route. `users` table aligned with the old schema's cheap/low-risk fields (see "Users table: schema alignment" below). Postman collection updated. Manually tested and confirmed by the user. |
 | 7 | Admin: create & manage users (replaces the interim `create:user` command) | ☐ | High priority — start this before/alongside Quoting. There is no self-service registration in this product (confirmed against the old app): an admin creates every account. In the old app: admin picks email/full name/role/profile, **sets the initial password directly**, the system emails the new user a welcome message with the login URL and that temporary password, and the user changes it later via the normal forgot-password flow (a separate, already-scoped-out feature). Needs: a `user.create`-style permission check (ties into item #5), an admin-only `POST /users`-style endpoint, and an admin UI (a simple table + "Add user" form is enough for v1 — no need to replicate the old app's full profile/manager fields yet). Until this ships, `node ace create:user` (see DEV.md) is the only way to create an account. |
-| 4 | Quoting — MVP (create a quote, add corridors, compute pricing, list/view quotes) | ☐ | Priority feature — needed for the Monday client demo. Scope to be narrowed further when we start it; see "Quoting MVP scope" below. |
+| 4 | Quoting / "New Pricing Request" — the main client-facing feature. Real data, not mock. 7 tabs: Summary, Setup Fee, Pricing, P&L, Quoting Summary, Legal, Approvals. Built in phases — see "Quoting: full scope and phases" below. | ▶ | **Phase 1 backend done and committed**, manually tested and confirmed by the user via Postman: reference data + corridor catalog + Quote/QuoteCorridor CRUD + backend pricing service, 38 passing tests, Postman collection, real reference data imported from the old project. Phases 2-5 (Setup Fee, P&L endpoint, Approvals, Legal doc generation) not started. Phase 1 frontend not started (UI comes from screenshots the user will provide). |
 | 5 | Roles & permissions (admin / sales / viewer) | ☐ | Deferred until after the demo unless the client asks for it. |
 | 6 | Corridor catalog & tiered/volume pricing | ☐ | Deferred — old project's "quote_aggregates" / "tiered fields" concepts, redesigned cleanly (see CLAUDE.md domain glossary for the naming fix). |
 | 8 | Dashboard shell UI (mock data) | ✔ | Manually tested and confirmed by the user (`docs/test-plans/dashboard-shell.md`). UI-only pass, deliberately ahead of Quoting's backend — visual layout + polish for the Monday demo. Full authenticated app shell (header with logos/notifications/user menu, nav tabs) + a Dashboard page (Payment Metrics + Corridor Status panels), matching the old app's layout but rebuilt clean (the old version had 100% hardcoded data, dead duplicate components, and an unused `framer-motion` dependency — see below). All dashboard numbers/tables here are **mock data**, explicitly flagged as such in code, served through hooks shaped like the real ones will be (so swapping in real data from item #4/#6 later is a hook-body change, not a rewrite). Framer Motion is actually used this time: card entrance/hover animations, animated stat count-ups, animated nav-tab underline. "Pricing Requests" and "Approvals" nav tabs exist visually but route to a placeholder page — no backend for either exists yet. Notification bell is static (a badge, no real unread-count backend). |
@@ -79,14 +79,42 @@ To avoid a painful data migration later, the `users` table was checked column-by
 
 If a future data-import task needs any of the "not adopted" fields, that's the point to add them — as their own scoped feature with its own migration, not retrofitted quietly.
 
-## Quoting MVP scope (for when item #4 starts)
+## Quoting: full scope and phases (item #4)
 
-Kept intentionally small so it's demoable Monday without dragging in the full old feature set:
+This is the main feature the client sees — a "New Pricing Request" with 7 tabs: **Summary, Setup Fee, Pricing, P&L, Quoting Summary, Legal, Approvals**. Investigated the old app's real implementation of all 7 tabs before designing this (see git history for the research); the old system had real weaknesses we're deliberately not repeating:
 
-- A quote has a name, an owner, a status, and one or more corridors.
-- A corridor has: origin country, destination country, payout currency, fixed fee, variable fee %, FX spread %, average transaction value, yearly volume.
-- The API computes and returns, per corridor and per quote: yearly revenue, yearly margin, take rate %.
-- Flat pricing only for the demo. Volume-tiered pricing (item #6) is a deliberate follow-up, not part of the MVP.
+- **All P&L/revenue/margin numbers were computed in the browser** and stored as an opaque JSON blob — no backend source of truth. **We do it properly: the backend computes and owns every number** (`app/services/quote_pricing_service.ts`); the frontend only displays them.
+- **Setup Fee and P&L had no real database tables** — JSON blobs on the quote. We use real, normalized columns/tables instead.
+- Duplicate near-identical columns (`standard_fixed_fee_usd` vs `std_fixed_fee_usd`, parallel `_precise` copies of every numeric field) — not repeated here; one canonical numeric column per value.
+
+**Database note:** the old project's binary dump (`priceframe-gm2.sql`) turned out to contain a cleaner, abandoned "v2" schema redesign with real (if small — dev/test-sized, not a full production catalog) reference data: regions, countries, currencies, use cases, ICP hierarchy, integration types, pegged rates, and a small corridor catalog. That data was recovered via `pg_restore` and is now seeded into our schema by `database/seeders/reference_data_seeder.ts` — real data, not invented placeholders, imported deliberately rather than blindly copying the old (messier) production schema.
+
+### Phase 1 — Quote + Corridors + Pricing core — ✔ backend done, tested, committed
+
+- Reference/lookup tables: `regions`, `countries`, `currencies`, `use_cases`, `integration_types`, `icp_nodes`, `pegged_rates` — seeded from real old-project data.
+- `corridors` — the catalog a user picks from when adding a corridor to a quote.
+- `quotes` — header: name, status (draft/submitted/approved/rejected/closed), owner, opportunity type, partner country, use case, integration type, ICP node, contract length, currencies.
+- `quote_corridors` — one row per corridor on a quote: inputs (volume, transactions, fixed fee, variable fee %, FX spread, discount %) and backend-computed outputs (revenue, FX margin, total revenue/margin, take rate, `needs_approval` + reasons).
+- `app/services/quote_pricing_service.ts` — the single source of truth for all pricing math. **Formulas are a documented first pass** (see comments in that file), not yet confirmed against real finance/business rules — centralized in one file specifically so they're easy to audit/adjust without touching controllers, models, or the frontend.
+- Endpoints: `GET/POST /reference/*` (lookups + catalog), `GET/POST/PATCH/DELETE /quotes`, `POST/PATCH/DELETE /quotes/:id/corridors/:id`. A quote is only editable (header or corridors) while `status = 'draft'`; an owner sees only their own quotes, an admin sees all.
+- 38 passing tests (19 new functional + 8 new unit, on top of the 11 auth tests), Postman collection updated with Reference Data + Quotes folders.
+- Frontend not started — UI will be built from screenshots the user provides.
+
+### Phase 2 — Setup Fee (not started)
+
+Real, normalized fields (not a JSON blob): fee type, amount, network joining fee, minimum commitment fee schedule, payment schedule. Scope intentionally smaller than the old app's ~10 "other fee" line items and tiered/principal MCF schedules — add those only if actually needed.
+
+### Phase 3 — P&L endpoint (not started)
+
+A `GET /quotes/:id/pnl`-style endpoint producing 3-year projections from the quote's corridors + setup fee, using growth-rate inputs — computed by the backend, not the client. Quoting Summary is just a read view over Phases 1-3, no new tables.
+
+### Phase 4 — Approvals (not started)
+
+Deliberately simple for v1: a quote has one approval record (approver, decision, comment, timestamp), no multi-step chain or auto-flagging engine yet — those depend on Roles & Permissions (item #5), which isn't built. `needs_approval`/`approval_reasons` per corridor already exist from Phase 1's pricing service.
+
+### Phase 5 — Legal document generation (not started)
+
+Generate a downloadable PDF/DOCX term sheet / fee annex from quote data using a template. Scoped to generation + download only — **not** the old system's in-browser collaborative document editing, comment threads, or Google Drive sync; those are separate, much larger subsystems.
 
 ## Template: adding a new feature
 

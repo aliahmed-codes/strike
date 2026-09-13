@@ -75,6 +75,13 @@ node ace create:user --email=you@example.com --first-name=Your --last-name=Name 
 # or just run `node ace create:user` with no flags to be prompted interactively
 ```
 
+**Seeding reference data (regions, countries, currencies, corridor catalog, etc.):** required for the Quoting feature (item #4) to have anything to pick from. Safe to re-run.
+
+```bash
+cd apps/server
+node ace db:seed
+```
+
 ## 4. The build process for every feature (read FEATURES.md first)
 
 Short version — full detail is in FEATURES.md:
@@ -174,3 +181,4 @@ Postgres isn't required to verify this stage — the server boots and serves HTT
 - **On Windows, `localhost` can resolve to `::1` (IPv6) and hit the wrong process** if something else is also bound to the same port on IPv6 only (e.g. a leftover `vite dev` process). If a port seems to be serving stale content, check `netstat -ano | grep <port>` for more than one listener and test with `127.0.0.1` explicitly to bypass the ambiguity.
 - **A native Postgres install and the Docker Postgres container both default to port 5432 — only one can actually be listening at a time.** If you have Postgres installed natively (e.g. as a Windows service) *and* run `docker compose up`, whichever one is running when the other tries to start will win the port; the other's container/service will fail to bind, or — more confusingly — your app may connect to whichever one happens to be up, silently giving inconsistent data depending on which was started last. Run `netstat -ano | grep :5432` and check with `Get-Process -Id <pid>` if data looks wrong or missing; don't assume `localhost:5432` always means the same database. Pick one Postgres to use locally (native or Docker) rather than running both.
 - **A workspace package's compiled types can go stale in a dependent app's `tsc -b` incremental cache.** After changing a type in `packages/shared/src/`, running `npm run build` there updates `dist/`, but `apps/client`'s `tsc -b` may not notice (it only tracks its own project's files closely, not a `node_modules` dependency's content). If a type change in `packages/shared` doesn't seem to take effect in the client, delete `apps/client/node_modules/.tmp` (and `.turbo/` at the repo root) and rebuild.
+- **Reading the old project's binary Postgres dumps** (`.sql` files that are actually `pg_dump -Fc` custom-format archives, not plain SQL text — check with `file <name>.sql`). `grep`/`cat` won't show you the data. Native Postgres 18's tools work even though they're not on `PATH`: `"C:\Program Files\PostgreSQL\18\bin\pg_restore.exe" -l <dump>` lists contents without restoring anything; to actually inspect rows, `CREATE DATABASE scratch_name`, then `pg_restore -h localhost -U postgres -d scratch_name --no-owner --no-privileges <dump>`, query it, then `DROP DATABASE scratch_name` when done. This is how the real reference data in `database/seeders/reference_data_seeder.ts` was recovered — the old dump turned out to contain an abandoned cleaner "v2" schema redesign, not just the messy production one.
