@@ -153,4 +153,106 @@ test.group('Corridor facets', () => {
     assert.equal(body.services.find((s: { value: string }) => s.value === 'bank_account').count, 1)
     assert.equal(body.services.find((s: { value: string }) => s.value === 'card').count, 0)
   })
+
+  test('hideUsdSwift excludes SWIFT-payer corridors from every count, but keeps the payer listed', async ({
+    client,
+    assert,
+  }) => {
+    const token = await createUserWithToken()
+    const { region1, country1 } = await seedTwoCorridorsInDifferentRegions()
+    const currency = await Currency.create({
+      isoCode3: 'CU2',
+      name: 'Test Currency Two',
+      decimalPlaces: 2,
+      isSource: false,
+      isFunding: false,
+      isPayout: true,
+      isFee: false,
+      isHard: false,
+      isPegged: false,
+    })
+    await Corridor.create({
+      countryId: country1.id,
+      serviceCode: 'bank_account',
+      transactionTypeCode: 'b2b',
+      payerCode: 'Some SWIFT Wire Transfer',
+      receivingPartner: 'partner_c',
+      payoutCurrencyId: currency.id,
+    })
+
+    const response = await client
+      .get('/reference/corridors/facets?hideUsdSwift=true')
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    const body = response.body()
+    // The 2 baseline corridors still count; the SWIFT one is excluded everywhere.
+    assert.equal(body.totalMatched, 2)
+    const regionCounts = Object.fromEntries(
+      body.regions.map((r: { value: number; count: number }) => [r.value, r.count])
+    )
+    assert.equal(regionCounts[region1.id], 1)
+
+    const payerOption = body.payers.find(
+      (p: { value: string }) => p.value === 'Some SWIFT Wire Transfer'
+    )
+    assert.exists(payerOption)
+    assert.equal(payerOption.count, 0)
+  })
+
+  test('restrictToUseCaseAllowedCountries limits the picker to the compliance allow-list', async ({
+    client,
+    assert,
+  }) => {
+    const token = await createUserWithToken()
+    const region = await Region.create({ code: 'EUR2', name: 'Europe Test' })
+    const allowedCountry = await Country.create({
+      isoCode3: 'FRA',
+      name: 'France',
+      regionId: region.id,
+    })
+    const disallowedCountry = await Country.create({
+      isoCode3: 'ZZQ',
+      name: 'Not Allow-Listed',
+      regionId: region.id,
+    })
+    const currency = await Currency.create({
+      isoCode3: 'CU3',
+      name: 'Test Currency Three',
+      decimalPlaces: 2,
+      isSource: false,
+      isFunding: false,
+      isPayout: true,
+      isFee: false,
+      isHard: false,
+      isPegged: false,
+    })
+    await Corridor.create({
+      countryId: allowedCountry.id,
+      serviceCode: 'bank_account',
+      transactionTypeCode: 'b2b',
+      payerCode: 'payer_allowed',
+      receivingPartner: 'partner_allowed',
+      payoutCurrencyId: currency.id,
+    })
+    await Corridor.create({
+      countryId: disallowedCountry.id,
+      serviceCode: 'bank_account',
+      transactionTypeCode: 'b2b',
+      payerCode: 'payer_disallowed',
+      receivingPartner: 'partner_disallowed',
+      payoutCurrencyId: currency.id,
+    })
+
+    const response = await client
+      .get('/reference/corridors/facets?restrictToUseCaseAllowedCountries=true')
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    const body = response.body()
+    assert.equal(body.totalMatched, 1)
+    const countryValues = body.countries.map((c: { value: number }) => c.value)
+    assert.includeMembers(countryValues, [allowedCountry.id])
+    assert.notInclude(countryValues, disallowedCountry.id)
+  })
 })

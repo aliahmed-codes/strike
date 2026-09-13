@@ -116,19 +116,21 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": {
-              "raw": "{{base_url}}/reference/corridors/facets?regionId=&countryId=&serviceCode=&transactionTypeCode=&payoutCurrencyId=&payerCode=",
+              "raw": "{{base_url}}/reference/corridors/facets?regionIds=&countryIds=&serviceCodes=&transactionTypeCodes=&payoutCurrencyIds=&payerCodes=&hideUsdSwift=&restrictToUseCaseAllowedCountries=",
               "host": ["{{base_url}}"],
               "path": ["reference", "corridors", "facets"],
               "query": [
-                { "key": "regionId", "value": "" },
-                { "key": "countryId", "value": "" },
-                { "key": "serviceCode", "value": "" },
-                { "key": "transactionTypeCode", "value": "" },
-                { "key": "payoutCurrencyId", "value": "" },
-                { "key": "payerCode", "value": "" }
+                { "key": "regionIds", "value": "", "description": "Comma-separated region ids, e.g. 1,2" },
+                { "key": "countryIds", "value": "", "description": "Comma-separated country ids" },
+                { "key": "serviceCodes", "value": "", "description": "Comma-separated service codes" },
+                { "key": "transactionTypeCodes", "value": "", "description": "Comma-separated transaction type codes" },
+                { "key": "payoutCurrencyIds", "value": "", "description": "Comma-separated currency ids" },
+                { "key": "payerCodes", "value": "", "description": "Comma-separated payer codes" },
+                { "key": "hideUsdSwift", "value": "", "description": "true to exclude any payer containing \"swift wire transfer\" from every count" },
+                { "key": "restrictToUseCaseAllowedCountries", "value": "", "description": "true to restrict the whole picker to the old app's compliance country allow-list (mirrors selecting \"Last Mile Payout\"/\"Account Top-Up\" as a use case)" }
               ]
             },
-            "description": "Powers the \"Corridors to Offer\" picker: per-dimension counts (regions, countries, services, transaction types, payout currencies, payers) plus totalAvailable/totalMatched, given any combination of the query filters. A dimension's own filter doesn't narrow its own counts (so the UI can show what picking something else would do), but it does narrow every other dimension's counts."
+            "description": "Powers the \"Corridors to Offer\" picker: per-dimension counts (regions, countries, services, transaction types, payout currencies, payers) plus totalAvailable/totalMatched, given any combination of the query filters. Every dimension supports multiple selected values (comma-separated, OR within a dimension, AND across dimensions). Region is a one-way filter: it narrows every other dimension but is never itself narrowed, even by its own filter — the other five dimensions narrow each other mutually (never by their own filter). Every panel always lists every value that exists, even ones with count 0, so the UI can disable rather than remove them."
           }
         }
       ]

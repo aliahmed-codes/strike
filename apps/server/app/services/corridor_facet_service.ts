@@ -102,8 +102,13 @@ export interface CorridorFacets {
   payers: FacetOption[]
 }
 
-/** The eligible set: every corridor, restricted only by the use-case country allow-list (if active). */
-function eligibleQuery(filters: CorridorFacetFilters) {
+/**
+ * The full value universe: every corridor restricted only by the use-case
+ * country allow-list (if active). Deliberately ignores "Hide USD SWIFT" and
+ * every dimension filter — this is what master option lists are built from,
+ * so a value never disappears from a panel, only its count changes.
+ */
+function universeQuery(filters: CorridorFacetFilters) {
   const query = db
     .from('corridors')
     .join('countries', 'corridors.country_id', 'countries.id')
@@ -113,16 +118,22 @@ function eligibleQuery(filters: CorridorFacetFilters) {
   if (filters.restrictToUseCaseAllowedCountries) {
     query.whereIn('countries.iso_code_3', RESTRICTED_USE_CASE_ALLOWED_COUNTRY_CODES)
   }
-  if (filters.hideUsdSwift) {
-    query.whereRaw("corridors.payer_code NOT ILIKE '%swift wire transfer%'")
-  }
 
   return query
 }
 
-/** The eligible set narrowed by every active filter except `exclude` (or all of them, if omitted). */
+/** The universe narrowed by "Hide USD SWIFT" only — used for counts that ignore every dimension filter (Region). */
+function swiftFilteredUniverseQuery(filters: CorridorFacetFilters) {
+  const query = universeQuery(filters)
+  if (filters.hideUsdSwift) {
+    query.whereRaw("corridors.payer_code NOT ILIKE '%swift wire transfer%'")
+  }
+  return query
+}
+
+/** The universe narrowed by "Hide USD SWIFT" plus every active dimension filter except `exclude` (or all of them, if omitted). */
 function narrowedQuery(filters: CorridorFacetFilters, exclude?: keyof CorridorFacetFilters) {
-  const query = eligibleQuery(filters)
+  const query = swiftFilteredUniverseQuery(filters)
 
   if (filters.regionIds?.length && exclude !== 'regionIds') {
     query.whereIn('countries.region_id', filters.regionIds)
@@ -167,7 +178,7 @@ async function dimensionFacet(
   labelColumn: string
 ): Promise<FacetOption[]> {
   const [master, counted] = await Promise.all([
-    eligibleQuery(filters)
+    universeQuery(filters)
       .select(`${valueColumn} as value`, `${labelColumn} as label`)
       .groupBy(valueColumn, labelColumn) as unknown as Promise<Row[]>,
     narrowedQuery(filters, dimension)
@@ -180,10 +191,11 @@ async function dimensionFacet(
 }
 
 async function regionFacet(filters: CorridorFacetFilters): Promise<FacetOption[]> {
-  // Region ignores every filter, including its own — it always reflects the
-  // full eligible set (matching the old app's "independent of all other
-  // filter selections" region-count rule).
-  const rows = (await eligibleQuery(filters)
+  // Region ignores every dimension filter, including its own — it always
+  // reflects the full eligible set (matching the old app's "independent of
+  // all other filter selections" region-count rule). "Hide USD SWIFT" still
+  // applies, since that skip happens globally in the old app too.
+  const rows = (await swiftFilteredUniverseQuery(filters)
     .select('regions.id as value', 'regions.name as label')
     .count('* as count')
     .groupBy('regions.id', 'regions.name')) as unknown as Row[]
