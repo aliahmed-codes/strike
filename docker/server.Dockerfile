@@ -42,5 +42,5 @@ COPY --from=build /app/packages/shared/dist packages/shared/dist
 COPY --from=build /app/apps/server/build apps/server/build
 
 WORKDIR /app/apps/server/build
-EXPOSE 3333
+EXPOSE 3334
 CMD ["sh", "-c", "node ace migration:run --force && node bin/server.js"]

@@ -15,7 +15,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3333',
+        target: 'http://localhost:3334',
         changeOrigin: true,
         // Strip the /api prefix so a call to /api/auth/login reaches the
         // server's /auth/login route — matches docker/nginx.conf's rewrite,

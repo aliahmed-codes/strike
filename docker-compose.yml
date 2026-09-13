@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
     environment:
       TZ: UTC
-      PORT: 3333
+      PORT: 3334
       HOST: 0.0.0.0
       LOG_LEVEL: info
       NODE_ENV: production
@@ -34,7 +34,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DB_DATABASE: ${POSTGRES_DB:-strike_dev}
     ports:
-      - '3333:3333'
+      - '3334:3334'
     depends_on:
       postgres:
         condition: service_healthy

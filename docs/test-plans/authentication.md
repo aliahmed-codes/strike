@@ -15,7 +15,7 @@ Manual test plan for the login/logout/session feature. Run this end-to-end befor
    ```
 3. Start both apps:
    ```bash
-   cd apps/server && npm run dev   # http://localhost:3333
+   cd apps/server && npm run dev   # http://localhost:3334
    cd apps/client && npm run dev   # http://localhost:5173
    ```
 

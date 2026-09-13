@@ -27,7 +27,7 @@ New to the repo? Read them in that order.
 ```bash
 npm install
 cp apps/server/.env.example apps/server/.env   # fill in your local DB credentials
-cd apps/server && npm run dev                  # http://localhost:3333
+cd apps/server && npm run dev                  # http://localhost:3334
 cd apps/client && npm run dev                  # http://localhost:5173
 ```
 
