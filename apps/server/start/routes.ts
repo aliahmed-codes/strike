@@ -37,6 +37,7 @@ router
     router.get('/integration-types', [ReferenceDataController, 'integrationTypes'])
     router.get('/icp-nodes', [ReferenceDataController, 'icpNodes'])
     router.get('/corridors', [ReferenceDataController, 'corridors'])
+    router.get('/corridors/facets', [ReferenceDataController, 'corridorFacets'])
   })
   .prefix('/reference')
   .use(middleware.auth())

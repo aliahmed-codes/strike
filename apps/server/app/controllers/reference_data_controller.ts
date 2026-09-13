@@ -6,6 +6,7 @@ import UseCase from '#models/use_case'
 import IntegrationType from '#models/integration_type'
 import IcpNode from '#models/icp_node'
 import Corridor from '#models/corridor'
+import { computeCorridorFacets } from '#services/corridor_facet_service'
 
 export default class ReferenceDataController {
   async regions() {
@@ -42,5 +43,19 @@ export default class ReferenceDataController {
     if (transactionTypeCode) query.where('transactionTypeCode', transactionTypeCode)
 
     return query.orderBy('id')
+  }
+
+  async corridorFacets({ request }: HttpContext) {
+    const { regionId, countryId, serviceCode, transactionTypeCode, payoutCurrencyId, payerCode } =
+      request.qs()
+
+    return computeCorridorFacets({
+      regionId: regionId ? Number(regionId) : undefined,
+      countryId: countryId ? Number(countryId) : undefined,
+      serviceCode: serviceCode || undefined,
+      transactionTypeCode: transactionTypeCode || undefined,
+      payoutCurrencyId: payoutCurrencyId ? Number(payoutCurrencyId) : undefined,
+      payerCode: payerCode || undefined,
+    })
   }
 }

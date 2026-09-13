@@ -5,6 +5,8 @@ import Country from '#models/country'
 import Currency from '#models/currency'
 import Corridor from '#models/corridor'
 import Quote from '#models/quote'
+import UseCase from '#models/use_case'
+import IcpNode from '#models/icp_node'
 
 async function createUserWithToken(role: 'admin' | 'sales' | 'viewer' = 'sales') {
   const user = await User.create({
@@ -138,6 +140,107 @@ test.group('Quotes: create/list/show', () => {
     response.assertStatus(200)
     assert.equal(response.body().quote.name, 'Faysal Bank')
     assert.equal(response.body().totals.corridorCount, 0)
+  })
+})
+
+test.group('Quotes: multi-value fields (use cases, currencies, ICP)', () => {
+  async function createTwoCurrencies() {
+    const usd = await Currency.create({
+      isoCode3: 'US1',
+      name: 'Test USD',
+      decimalPlaces: 2,
+      isSource: true,
+      isFunding: true,
+      isPayout: true,
+      isFee: true,
+      isHard: true,
+      isPegged: false,
+    })
+    const eur = await Currency.create({
+      isoCode3: 'EU1',
+      name: 'Test EUR',
+      decimalPlaces: 2,
+      isSource: true,
+      isFunding: true,
+      isPayout: true,
+      isFee: true,
+      isHard: true,
+      isPegged: false,
+    })
+    return [usd, eur]
+  }
+
+  test('creating a quote syncs multiple funding/source currencies and use cases', async ({
+    client,
+    assert,
+  }) => {
+    const { token } = await createUserWithToken()
+    const [usd, eur] = await createTwoCurrencies()
+    const useCase1 = await UseCase.create({ code: 'uc1', label: 'Use Case 1', isActive: true })
+    const useCase2 = await UseCase.create({ code: 'uc2', label: 'Use Case 2', isActive: true })
+
+    const response = await client
+      .post('/quotes')
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        name: 'Multi Currency Quote',
+        fundingCurrencyIds: [usd.id, eur.id],
+        sourceCurrencyIds: [usd.id],
+        useCaseIds: [useCase1.id, useCase2.id],
+      })
+
+    response.assertStatus(201)
+    assert.lengthOf(response.body().fundingCurrencies, 2)
+    assert.lengthOf(response.body().sourceCurrencies, 1)
+    assert.lengthOf(response.body().useCases, 2)
+  })
+
+  test('updating a quote replaces its currency/use-case selections', async ({ client, assert }) => {
+    const { token, user } = await createUserWithToken()
+    const [usd, eur] = await createTwoCurrencies()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    await quote.related('fundingCurrencies').sync([usd.id, eur.id])
+
+    const response = await client
+      .patch(`/quotes/${quote.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ fundingCurrencyIds: [eur.id] })
+
+    response.assertStatus(200)
+    assert.lengthOf(response.body().fundingCurrencies, 1)
+    assert.equal(response.body().fundingCurrencies[0].id, eur.id)
+  })
+
+  test('stores the 3 independent ICP levels', async ({ client, assert }) => {
+    const { token } = await createUserWithToken()
+    const level1 = await IcpNode.create({
+      code: 'L1-TEST',
+      name: 'Level 1',
+      level: 1,
+      isActive: true,
+    })
+    const level2 = await IcpNode.create({
+      code: 'L2-TEST',
+      name: 'Level 2',
+      level: 2,
+      parentId: level1.id,
+      isActive: true,
+    })
+
+    const created = await client
+      .post('/quotes')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'ICP Quote', icpLevel1Id: level1.id, icpLevel2Id: level2.id })
+    created.assertStatus(201)
+
+    const response = await client
+      .get(`/quotes/${created.body().id}`)
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    assert.equal(response.body().quote.icpLevel1.id, level1.id)
+    assert.equal(response.body().quote.icpLevel2.id, level2.id)
+    assert.isNull(response.body().quote.icpLevel3Id)
   })
 })
 

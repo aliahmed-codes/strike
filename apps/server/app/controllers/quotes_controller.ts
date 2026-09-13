@@ -4,6 +4,28 @@ import { canAccessQuote } from '#services/quote_access_service'
 import { computeQuoteTotals } from '#services/quote_pricing_service'
 import { createQuoteValidator, updateQuoteValidator } from '#validators/quote'
 
+type QuotePivotFields = {
+  useCaseIds?: number[]
+  fundingCurrencyIds?: number[]
+  sourceCurrencyIds?: number[]
+}
+
+/** Splits pivot-table sets (many-to-many) off from the plain columns on the payload. */
+function splitPivotFields<T extends QuotePivotFields>(payload: T) {
+  const { useCaseIds, fundingCurrencyIds, sourceCurrencyIds, ...columns } = payload
+  return { columns, pivots: { useCaseIds, fundingCurrencyIds, sourceCurrencyIds } }
+}
+
+async function syncPivots(quote: Quote, pivots: QuotePivotFields) {
+  if (pivots.useCaseIds) await quote.related('useCases').sync(pivots.useCaseIds)
+  if (pivots.fundingCurrencyIds) {
+    await quote.related('fundingCurrencies').sync(pivots.fundingCurrencyIds)
+  }
+  if (pivots.sourceCurrencyIds) {
+    await quote.related('sourceCurrencies').sync(pivots.sourceCurrencyIds)
+  }
+}
+
 export default class QuotesController {
   async index({ auth, response }: HttpContext) {
     const user = auth.getUserOrFail()
@@ -23,8 +45,14 @@ export default class QuotesController {
   async store({ auth, request, response }: HttpContext) {
     const user = auth.getUserOrFail()
     const payload = await request.validateUsing(createQuoteValidator)
+    const { columns, pivots } = splitPivotFields(payload)
 
-    const quote = await Quote.create({ ...payload, ownerId: user.id, status: 'draft' })
+    const quote = await Quote.create({ ...columns, ownerId: user.id, status: 'draft' })
+    await syncPivots(quote, pivots)
+
+    await quote.load('useCases')
+    await quote.load('fundingCurrencies')
+    await quote.load('sourceCurrencies')
 
     return response.created(quote)
   }
@@ -42,11 +70,16 @@ export default class QuotesController {
 
     await quote.load('owner')
     await quote.load('partnerCountry')
-    await quote.load('useCase')
+    await quote.load('useCases')
     await quote.load('integrationType')
-    await quote.load('icpNode')
+    await quote.load('icpLevel1')
+    await quote.load('icpLevel2')
+    await quote.load('icpLevel3')
     await quote.load('fundingCurrency')
+    await quote.load('fundingCurrencies')
     await quote.load('sourceCurrency')
+    await quote.load('sourceCurrencies')
+    await quote.load('defaultFeeCurrency')
     await quote.load('corridors', (q) => {
       q.preload('corridor', (cq) => cq.preload('country').preload('payoutCurrency'))
       q.preload('fundingCurrency')
@@ -73,8 +106,15 @@ export default class QuotesController {
     }
 
     const payload = await request.validateUsing(updateQuoteValidator)
-    quote.merge(payload)
+    const { columns, pivots } = splitPivotFields(payload)
+
+    quote.merge(columns)
     await quote.save()
+    await syncPivots(quote, pivots)
+
+    await quote.load('useCases')
+    await quote.load('fundingCurrencies')
+    await quote.load('sourceCurrencies')
 
     return response.ok(quote)
   }

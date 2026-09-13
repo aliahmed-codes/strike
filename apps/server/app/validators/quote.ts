@@ -1,66 +1,73 @@
 import vine from '@vinejs/vine'
 
+const PRICING_STRATEGIES = [
+  'corridor_pricing',
+  'trx_fee_tiered_pricing',
+  'fx_tiered_pricing',
+] as const
+const FX_PRICING_OPTIONS = ['fx_spread', 'fx_markup'] as const
+const FX_MODELS = ['traditional_fx', 'stablecoin'] as const
+
+const quoteFields = {
+  opportunityType: vine.string().trim().maxLength(60).optional(),
+  partnerCountryId: vine
+    .number()
+    .positive()
+    .exists({ table: 'countries', column: 'id' })
+    .optional(),
+  useCaseIds: vine
+    .array(vine.number().positive().exists({ table: 'use_cases', column: 'id' }))
+    .optional(),
+  integrationTypeId: vine
+    .number()
+    .positive()
+    .exists({ table: 'integration_types', column: 'id' })
+    .optional(),
+  icpLevel1Id: vine.number().positive().exists({ table: 'icp_nodes', column: 'id' }).optional(),
+  icpLevel2Id: vine.number().positive().exists({ table: 'icp_nodes', column: 'id' }).optional(),
+  icpLevel3Id: vine.number().positive().exists({ table: 'icp_nodes', column: 'id' }).optional(),
+  contractLengthYears: vine.number().min(1).max(20).optional(),
+  waivedMonths: vine.number().min(0).max(24).optional(),
+  partnerPrCode: vine.string().trim().maxLength(60).optional(),
+  showFxSourceInContract: vine.boolean().optional(),
+  showFxSpreadInContract: vine.boolean().optional(),
+  fxModel: vine.enum(FX_MODELS).optional(),
+  selectedPricingStrategy: vine.enum(PRICING_STRATEGIES).optional(),
+  selectedFxPricing: vine.enum(FX_PRICING_OPTIONS).optional(),
+  fundingCurrencyId: vine
+    .number()
+    .positive()
+    .exists({ table: 'currencies', column: 'id' })
+    .optional(),
+  fundingCurrencyIds: vine
+    .array(vine.number().positive().exists({ table: 'currencies', column: 'id' }))
+    .optional(),
+  sourceCurrencyId: vine
+    .number()
+    .positive()
+    .exists({ table: 'currencies', column: 'id' })
+    .optional(),
+  sourceCurrencyIds: vine
+    .array(vine.number().positive().exists({ table: 'currencies', column: 'id' }))
+    .optional(),
+  defaultFeeCurrencyId: vine
+    .number()
+    .positive()
+    .exists({ table: 'currencies', column: 'id' })
+    .optional(),
+}
+
 export const createQuoteValidator = vine.compile(
   vine.object({
     name: vine.string().trim().minLength(1).maxLength(200),
-    opportunityType: vine.string().trim().maxLength(60).optional(),
-    partnerCountryId: vine
-      .number()
-      .positive()
-      .exists({ table: 'countries', column: 'id' })
-      .optional(),
-    useCaseId: vine.number().positive().exists({ table: 'use_cases', column: 'id' }).optional(),
-    integrationTypeId: vine
-      .number()
-      .positive()
-      .exists({ table: 'integration_types', column: 'id' })
-      .optional(),
-    icpNodeId: vine.number().positive().exists({ table: 'icp_nodes', column: 'id' }).optional(),
-    contractLengthYears: vine.number().min(1).max(20).optional(),
-    waivedMonths: vine.number().min(0).max(24).optional(),
-    partnerPrCode: vine.string().trim().maxLength(60).optional(),
-    fundingCurrencyId: vine
-      .number()
-      .positive()
-      .exists({ table: 'currencies', column: 'id' })
-      .optional(),
-    sourceCurrencyId: vine
-      .number()
-      .positive()
-      .exists({ table: 'currencies', column: 'id' })
-      .optional(),
+    ...quoteFields,
   })
 )
 
 export const updateQuoteValidator = vine.compile(
   vine.object({
     name: vine.string().trim().minLength(1).maxLength(200).optional(),
-    opportunityType: vine.string().trim().maxLength(60).optional(),
-    partnerCountryId: vine
-      .number()
-      .positive()
-      .exists({ table: 'countries', column: 'id' })
-      .optional(),
-    useCaseId: vine.number().positive().exists({ table: 'use_cases', column: 'id' }).optional(),
-    integrationTypeId: vine
-      .number()
-      .positive()
-      .exists({ table: 'integration_types', column: 'id' })
-      .optional(),
-    icpNodeId: vine.number().positive().exists({ table: 'icp_nodes', column: 'id' }).optional(),
-    contractLengthYears: vine.number().min(1).max(20).optional(),
-    waivedMonths: vine.number().min(0).max(24).optional(),
-    partnerPrCode: vine.string().trim().maxLength(60).optional(),
-    fundingCurrencyId: vine
-      .number()
-      .positive()
-      .exists({ table: 'currencies', column: 'id' })
-      .optional(),
-    sourceCurrencyId: vine
-      .number()
-      .positive()
-      .exists({ table: 'currencies', column: 'id' })
-      .optional(),
+    ...quoteFields,
   })
 )
 
