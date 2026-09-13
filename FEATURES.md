@@ -93,12 +93,14 @@ This is the main feature the client sees — a "New Pricing Request" with 7 tabs
 
 - Reference/lookup tables: `regions`, `countries`, `currencies`, `use_cases`, `integration_types`, `icp_nodes`, `pegged_rates` — seeded from real old-project data.
 - `corridors` — the catalog a user picks from when adding a corridor to a quote.
-- `quotes` — header: name, status (draft/submitted/approved/rejected/closed), owner, opportunity type, partner country, use case, integration type, ICP node, contract length, currencies.
+- `quotes` — header: name, status (draft/submitted/approved/rejected/closed), owner, opportunity type, partner country, use case(s), integration type, 3 independent ICP levels, contract length, currencies, plus (added once real Summary-tab screenshots arrived) `show_fx_source_in_contract`/`show_fx_spread_in_contract`, `fx_model`, `selected_pricing_strategy`, `selected_fx_pricing`, `default_fee_currency_id`.
+- **Multi-value fields, matching the old app exactly** (confirmed required, not simplified): a quote can have several funding currencies and several source currencies (`quote_funding_currencies`/`quote_source_currencies` join tables) and several use cases (`quote_use_cases`) — `funding_currency_id`/`source_currency_id` on the quote itself remain the "default" one shown first.
 - `quote_corridors` — one row per corridor on a quote: inputs (volume, transactions, fixed fee, variable fee %, FX spread, discount %) and backend-computed outputs (revenue, FX margin, total revenue/margin, take rate, `needs_approval` + reasons).
 - `app/services/quote_pricing_service.ts` — the single source of truth for all pricing math. **Formulas are a documented first pass** (see comments in that file), not yet confirmed against real finance/business rules — centralized in one file specifically so they're easy to audit/adjust without touching controllers, models, or the frontend.
-- Endpoints: `GET/POST /reference/*` (lookups + catalog), `GET/POST/PATCH/DELETE /quotes`, `POST/PATCH/DELETE /quotes/:id/corridors/:id`. A quote is only editable (header or corridors) while `status = 'draft'`; an owner sees only their own quotes, an admin sees all.
-- 38 passing tests (19 new functional + 8 new unit, on top of the 11 auth tests), Postman collection updated with Reference Data + Quotes folders.
-- Frontend not started — UI will be built from screenshots the user provides.
+- `app/services/corridor_facet_service.ts` + `GET /reference/corridors/facets` — per-dimension corridor counts (region/country/service/transaction-type/payout-currency/payer) given any combination of active filters, powering the "Corridors to Offer" picker. A dimension's own active filter doesn't narrow its own counts (so the UI can show what picking something else would do).
+- Endpoints: `GET/POST /reference/*` (lookups + catalog + facets), `GET/POST/PATCH/DELETE /quotes`, `POST/PATCH/DELETE /quotes/:id/corridors/:id`. A quote is only editable (header or corridors) while `status = 'draft'`; an owner sees only their own quotes, an admin sees all.
+- 44 passing tests (25 functional + 8 unit + 11 auth), Postman collection updated with Reference Data + Quotes folders including the new facets endpoint.
+- Frontend not started — UI will be built from screenshots the user provides. Setup Fee tab (Phase 2) will show a placeholder until its backend exists.
 
 ### Phase 2 — Setup Fee (not started)
 
