@@ -18,7 +18,7 @@ export default class extends BaseSchema {
 
     this.schema.createTable('countries', (table) => {
       table.increments('id')
-      table.string('iso_code_2', 2).notNullable().unique()
+      table.string('iso_code_3', 3).notNullable().unique()
       table.string('name', 100).notNullable()
       table.integer('region_id').unsigned().notNullable().references('id').inTable('regions')
       table.timestamp('created_at').notNullable()

@@ -24,6 +24,9 @@ export default class Corridor extends BaseModel {
   declare payerCode: string
 
   @column()
+  declare receivingPartner: string
+
+  @column()
   declare payoutCurrencyId: number
 
   @belongsTo(() => Currency, { foreignKey: 'payoutCurrencyId' })

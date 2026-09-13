@@ -21,12 +21,12 @@ async function seedTwoCorridorsInDifferentRegions() {
   const region1 = await Region.create({ code: 'R1', name: 'Region One' })
   const region2 = await Region.create({ code: 'R2', name: 'Region Two' })
   const country1 = await Country.create({
-    isoCode2: 'C1',
+    isoCode3: 'CO1',
     name: 'Country One',
     regionId: region1.id,
   })
   const country2 = await Country.create({
-    isoCode2: 'C2',
+    isoCode3: 'CO2',
     name: 'Country Two',
     regionId: region2.id,
   })
@@ -47,6 +47,7 @@ async function seedTwoCorridorsInDifferentRegions() {
     serviceCode: 'bank_account',
     transactionTypeCode: 'b2b',
     payerCode: 'payer_a',
+    receivingPartner: 'partner_a',
     payoutCurrencyId: currency.id,
   })
   const corridor2 = await Corridor.create({
@@ -54,6 +55,7 @@ async function seedTwoCorridorsInDifferentRegions() {
     serviceCode: 'card',
     transactionTypeCode: 'b2c',
     payerCode: 'payer_b',
+    receivingPartner: 'partner_b',
     payoutCurrencyId: currency.id,
   })
 
@@ -84,23 +86,28 @@ test.group('Corridor facets', () => {
     assert.equal(regionCounts[region2.id], 1)
   })
 
-  test('narrows totalMatched and other-dimension facets when a region filter is applied', async ({
+  test('narrows totalMatched and other-dimension counts when a region filter is applied, but keeps every option listed', async ({
     client,
     assert,
   }) => {
     const token = await createUserWithToken()
-    const { region1, country1 } = await seedTwoCorridorsInDifferentRegions()
+    const { region1, country1, country2 } = await seedTwoCorridorsInDifferentRegions()
 
     const response = await client
-      .get(`/reference/corridors/facets?regionId=${region1.id}`)
+      .get(`/reference/corridors/facets?regionIds=${region1.id}`)
       .header('Authorization', `Bearer ${token}`)
 
     response.assertStatus(200)
     const body = response.body()
     assert.equal(body.totalMatched, 1)
-    // Countries facet respects the active region filter (only country1 remains).
-    assert.lengthOf(body.countries, 1)
-    assert.equal(body.countries[0].value, country1.id)
+    // Both countries still appear (so the UI can show country2 disabled rather
+    // than removing it) but only country1's count reflects the region filter.
+    assert.lengthOf(body.countries, 2)
+    const countryCounts = Object.fromEntries(
+      body.countries.map((c: { value: number; count: number }) => [c.value, c.count])
+    )
+    assert.equal(countryCounts[country1.id], 1)
+    assert.equal(countryCounts[country2.id], 0)
   })
 
   test("a facet's own dimension is not narrowed by its own active filter", async ({
@@ -111,7 +118,7 @@ test.group('Corridor facets', () => {
     const { region1, region2 } = await seedTwoCorridorsInDifferentRegions()
 
     const response = await client
-      .get(`/reference/corridors/facets?regionId=${region1.id}`)
+      .get(`/reference/corridors/facets?regionIds=${region1.id}`)
       .header('Authorization', `Bearer ${token}`)
 
     response.assertStatus(200)
@@ -119,5 +126,31 @@ test.group('Corridor facets', () => {
     // Both regions still show up (so the UI can show what picking the OTHER region would do).
     const regionValues = body.regions.map((r: { value: number }) => r.value)
     assert.includeMembers(regionValues, [region1.id, region2.id])
+  })
+
+  test('region counts ignore every filter, even ones from other dimensions (matches the old app exactly)', async ({
+    client,
+    assert,
+  }) => {
+    const token = await createUserWithToken()
+    const { region1, region2, country1 } = await seedTwoCorridorsInDifferentRegions()
+
+    // Filtering by country1 (which is in region1) should narrow the Service
+    // facet (a different dimension) but must NOT change either region's count.
+    const response = await client
+      .get(`/reference/corridors/facets?countryIds=${country1.id}`)
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    const body = response.body()
+    const regionCounts = Object.fromEntries(
+      body.regions.map((r: { value: number; count: number }) => [r.value, r.count])
+    )
+    assert.equal(regionCounts[region1.id], 1)
+    assert.equal(regionCounts[region2.id], 1)
+
+    // Service facet, in contrast, is narrowed down to just corridor1's service.
+    assert.equal(body.services.find((s: { value: string }) => s.value === 'bank_account').count, 1)
+    assert.equal(body.services.find((s: { value: string }) => s.value === 'card').count, 0)
   })
 })

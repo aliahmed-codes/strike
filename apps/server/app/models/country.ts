@@ -8,7 +8,7 @@ export default class Country extends BaseModel {
   declare id: number
 
   @column()
-  declare isoCode2: string
+  declare isoCode3: string
 
   @column()
   declare name: string

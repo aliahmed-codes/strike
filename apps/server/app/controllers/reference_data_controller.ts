@@ -46,16 +46,36 @@ export default class ReferenceDataController {
   }
 
   async corridorFacets({ request }: HttpContext) {
-    const { regionId, countryId, serviceCode, transactionTypeCode, payoutCurrencyId, payerCode } =
-      request.qs()
+    const {
+      regionIds,
+      countryIds,
+      serviceCodes,
+      transactionTypeCodes,
+      payoutCurrencyIds,
+      payerCodes,
+      hideUsdSwift,
+      restrictToUseCaseAllowedCountries,
+    } = request.qs()
+
+    const toNumberList = (value: unknown) =>
+      typeof value === 'string' && value.length > 0
+        ? value
+            .split(',')
+            .map(Number)
+            .filter((n) => !Number.isNaN(n))
+        : undefined
+    const toStringList = (value: unknown) =>
+      typeof value === 'string' && value.length > 0 ? value.split(',') : undefined
 
     return computeCorridorFacets({
-      regionId: regionId ? Number(regionId) : undefined,
-      countryId: countryId ? Number(countryId) : undefined,
-      serviceCode: serviceCode || undefined,
-      transactionTypeCode: transactionTypeCode || undefined,
-      payoutCurrencyId: payoutCurrencyId ? Number(payoutCurrencyId) : undefined,
-      payerCode: payerCode || undefined,
+      regionIds: toNumberList(regionIds),
+      countryIds: toNumberList(countryIds),
+      serviceCodes: toStringList(serviceCodes),
+      transactionTypeCodes: toStringList(transactionTypeCodes),
+      payoutCurrencyIds: toNumberList(payoutCurrencyIds),
+      payerCodes: toStringList(payerCodes),
+      hideUsdSwift: hideUsdSwift === 'true',
+      restrictToUseCaseAllowedCountries: restrictToUseCaseAllowedCountries === 'true',
     })
   }
 }

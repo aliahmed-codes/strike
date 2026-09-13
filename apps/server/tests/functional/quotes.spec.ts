@@ -22,7 +22,7 @@ async function createUserWithToken(role: 'admin' | 'sales' | 'viewer' = 'sales')
 
 async function createCorridor() {
   const region = await Region.create({ code: 'TST', name: 'Test Region' })
-  const country = await Country.create({ isoCode2: 'ZZ', name: 'Testland', regionId: region.id })
+  const country = await Country.create({ isoCode3: 'ZZL', name: 'Testland', regionId: region.id })
   const currency = await Currency.create({
     isoCode3: 'ZZZ',
     name: 'Test Currency',
@@ -39,6 +39,7 @@ async function createCorridor() {
     serviceCode: 'bank_account',
     transactionTypeCode: 'b2b',
     payerCode: 'test_payer',
+    receivingPartner: 'test_partner',
     payoutCurrencyId: currency.id,
   })
 }

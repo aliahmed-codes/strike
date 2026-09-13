@@ -2,11 +2,12 @@ import vine from '@vinejs/vine'
 
 const PRICING_STRATEGIES = [
   'corridor_pricing',
-  'trx_fee_tiered_pricing',
-  'fx_tiered_pricing',
+  'flat_fee',
+  'volume_based',
+  'tiered_pricing',
 ] as const
-const FX_PRICING_OPTIONS = ['fx_spread', 'fx_markup'] as const
-const FX_MODELS = ['traditional_fx', 'stablecoin'] as const
+const FX_PRICING_OPTIONS = ['fx_spread', 'revenue_share'] as const
+const FX_MODELS = ['traditional_fx', 'trading_desk', 'both_models'] as const
 
 const quoteFields = {
   opportunityType: vine.string().trim().maxLength(60).optional(),

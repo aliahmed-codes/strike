@@ -1,50 +1,185 @@
-export type QuoteStatus = 'draft' | 'submitted' | 'approved' | 'rejected'
+export type QuoteStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'closed'
 
-export type PricingModel = 'flat' | 'volume_tiered'
+export interface Region {
+  id: number
+  code: string
+  name: string
+}
 
-export interface VolumeTier {
-  /** Inclusive lower bound of yearly volume for this tier. */
-  fromVolume: number
-  /** Exclusive upper bound; null means "and above". */
-  toVolume: number | null
-  fixedFee: number
-  variableFeePercent: number
+export interface Country {
+  id: number
+  isoCode3: string
+  name: string
+  regionId: number
+  region?: Region
+}
+
+export interface Currency {
+  id: number
+  isoCode3: string
+  name: string
+  decimalPlaces: number
+  isSource: boolean
+  isFunding: boolean
+  isPayout: boolean
+  isFee: boolean
+  isHard: boolean
+  isPegged: boolean
+}
+
+export interface UseCase {
+  id: number
+  code: string
+  label: string
+  isActive: boolean
+}
+
+export interface IntegrationType {
+  id: number
+  name: string
+}
+
+export interface IcpNode {
+  id: number
+  code: string
+  name: string
+  level: number
+  parentId: number | null
+  isActive: boolean
+}
+
+export interface Corridor {
+  id: number
+  countryId: number
+  country?: Country
+  serviceCode: string
+  transactionTypeCode: string
+  payerCode: string
+  receivingPartner: string
+  payoutCurrencyId: number
+  payoutCurrency?: Currency
 }
 
 export interface QuoteCorridorInput {
-  originCountry: string
-  destinationCountry: string
-  payoutCurrency: string
-  pricingModel: PricingModel
-  fixedFee: number
-  variableFeePercent: number
-  fxSpreadPercent: number
-  averageTransactionValue: number
-  yearlyVolume: number
-  tiers?: VolumeTier[]
+  corridorId: number
+  fundingCurrencyId?: number | null
+  atvUsd?: number
+  yearlyVolumeUsd: number
+  yearlyTransactions: number
+  fixedFeeUsd: number
+  variableFeePct: number
+  appliedFxSpread: number
+  feeDiscountPct?: number
 }
 
 export interface QuoteCorridor extends QuoteCorridorInput {
-  id: string
-  quoteId: string
-  yearlyRevenue: number
-  yearlyMargin: number
-  takeRatePercent: number
+  id: number
+  quoteId: number
+  revenueFee: number | null
+  fxMargin: number | null
+  fxMarginPct: number | null
+  marginFee: number | null
+  totalRevenue: number | null
+  totalMargin: number | null
+  marginPct: number | null
+  grossMarginPct: number | null
+  takeRatePct: number | null
+  computedAt: string | null
+  needsApproval: boolean
+  approvalReasons: string[] | null
+  corridor?: Corridor
+  fundingCurrency?: Currency
 }
 
-export interface Quote {
-  id: string
+export type FxModel = 'traditional_fx' | 'trading_desk' | 'both_models'
+export type PricingStrategy = 'corridor_pricing' | 'flat_fee' | 'volume_based' | 'tiered_pricing'
+export type FxPricingOption = 'fx_spread' | 'revenue_share'
+
+/** Everything a user can set on a quote's header — the create/update payload shape. */
+export interface QuoteFields {
   name: string
+  opportunityType?: string | null
+  partnerCountryId?: number | null
+  useCaseIds?: number[]
+  integrationTypeId?: number | null
+  icpLevel1Id?: number | null
+  icpLevel2Id?: number | null
+  icpLevel3Id?: number | null
+  contractLengthYears?: number | null
+  waivedMonths?: number
+  partnerPrCode?: string | null
+  showFxSourceInContract?: boolean
+  showFxSpreadInContract?: boolean
+  fxModel?: FxModel | null
+  selectedPricingStrategy?: PricingStrategy | null
+  selectedFxPricing?: FxPricingOption | null
+  fundingCurrencyId?: number | null
+  fundingCurrencyIds?: number[]
+  sourceCurrencyId?: number | null
+  sourceCurrencyIds?: number[]
+  defaultFeeCurrencyId?: number | null
+}
+
+export interface Quote extends QuoteFields {
+  id: number
   status: QuoteStatus
-  ownerId: string
+  ownerId: number
   createdAt: string
   updatedAt: string
-  corridors: QuoteCorridor[]
-  totalYearlyRevenue: number
-  totalYearlyMargin: number
+  owner?: { id: number; firstName: string; lastName: string; email: string }
+  partnerCountry?: Country | null
+  useCases?: UseCase[]
+  integrationType?: IntegrationType | null
+  icpLevel1?: IcpNode | null
+  icpLevel2?: IcpNode | null
+  icpLevel3?: IcpNode | null
+  fundingCurrency?: Currency | null
+  fundingCurrencies?: Currency[]
+  sourceCurrency?: Currency | null
+  sourceCurrencies?: Currency[]
+  defaultFeeCurrency?: Currency | null
+  corridors?: QuoteCorridor[]
 }
 
-export interface CreateQuotePayload {
+export interface QuoteListItem {
+  id: number
   name: string
-  corridors: QuoteCorridorInput[]
+  status: QuoteStatus
+  ownerId: number
+  createdAt: string
+  updatedAt: string
+  corridorCount?: number
+}
+
+export interface QuoteTotals {
+  totalRevenue: number
+  totalMargin: number
+  totalVolumeUsd: number
+  totalTransactions: number
+  averageTakeRatePct: number
+  weightedGrossMarginPct: number
+  corridorCount: number
+  corridorsNeedingApproval: number
+}
+
+export interface QuoteShowResponse {
+  quote: Quote
+  totals: QuoteTotals
+}
+
+export interface CorridorFacetOption {
+  value: string | number
+  label: string
+  count: number
+}
+
+export interface CorridorFacets {
+  totalAvailable: number
+  totalMatched: number
+  regions: CorridorFacetOption[]
+  countries: CorridorFacetOption[]
+  services: CorridorFacetOption[]
+  transactionTypes: CorridorFacetOption[]
+  payoutCurrencies: CorridorFacetOption[]
+  payers: CorridorFacetOption[]
 }
