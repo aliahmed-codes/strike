@@ -1,10 +1,17 @@
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { useQuoteWorkspaceStore } from '@/features/quotes/store/useQuoteWorkspaceStore'
 import { CorridorStatusPanel } from '../components/CorridorStatusPanel'
 import { PaymentMetricsPanel } from '../components/PaymentMetricsPanel'
 
 export function DashboardPage() {
   const navigate = useNavigate()
+  const openNewDraftTab = useQuoteWorkspaceStore((state) => state.openNewDraftTab)
+
+  function handleCreate() {
+    const key = openNewDraftTab()
+    navigate(`/quotes/${key}`)
+  }
 
   return (
     <div className="space-y-6">
@@ -13,7 +20,7 @@ export function DashboardPage() {
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">Overview of your pricing operations</p>
         </div>
-        <Button onClick={() => navigate('/pricing-requests')}>Create Pricing Request</Button>
+        <Button onClick={handleCreate}>Create Pricing Request</Button>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
