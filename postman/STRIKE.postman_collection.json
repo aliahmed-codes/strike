@@ -267,6 +267,39 @@
           }
         },
         {
+          "name": "Get Setup Fee",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/setup-fee",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}", "setup-fee"]
+            },
+            "description": "Returns `{ setupFee: null }` until the tab has been saved once, otherwise `{ setupFee: {...} }` with every backend-computed value (finalCommitmentFee, year1CommittedRevenue, totalContractValue, needsApproval, approvalReasons) plus its milestones/principal-slots/block-fees/other-fees."
+          }
+        },
+        {
+          "name": "Update Setup Fee",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"feeType\": \"setup\",\n  \"quotedPrice\": 100000,\n  \"paymentSchedule\": \"full\",\n  \"joiningFeeBillingType\": \"at_signing\",\n  \"mcfType\": \"standard\",\n  \"mcfBillingStart\": \"at_signing\",\n  \"standardCommitmentFee\": 5000,\n  \"commitmentFeeDiscountPct\": 0,\n  \"waivedMonths\": 0,\n  \"rebateIncentive\": false,\n  \"otherFees\": [\n    { \"conceptCode\": \"reversal_request\", \"amount\": 10, \"isPercentage\": false },\n    { \"conceptCode\": \"proof_of_payment\", \"amount\": 10, \"isPercentage\": false },\n    { \"conceptCode\": \"emergency_funding\", \"amount\": 0.3, \"isPercentage\": true },\n    { \"conceptCode\": \"treasury_management\", \"amount\": 0.1, \"isPercentage\": true },\n    { \"conceptCode\": \"business_hub_platform\", \"amount\": 500, \"isPercentage\": false },\n    { \"conceptCode\": \"corridor_no_usage\", \"amount\": 200, \"isPercentage\": false },\n    { \"conceptCode\": \"bulk_currency_conversion\", \"amount\": 200, \"isPercentage\": false }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/setup-fee",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}", "setup-fee"]
+            },
+            "description": "Creates or replaces the quote's whole Setup Fee tab in one call (only allowed while the quote is in 'draft' status). The backend validates cross-field consistency (custom payment milestones must sum to exactly 100%, principal-based MCF must have enough slots for the contract length, waived months capped at 6 — the old app's own UI never actually allowed past 6 despite its input saying 24) and computes finalCommitmentFee/year1CommittedRevenue/totalContractValue/needsApproval/approvalReasons itself — none of that is trusted from the request body. otherFees concept codes: reversal_request, proof_of_payment, emergency_funding, treasury_management, business_hub_platform, post_funding_penalty, corridor_no_usage, white_glove, stablecoin_prefunding, digital_asset_icp_setup, bulk_currency_conversion, currencies_for_treasury. For a custom payment schedule, add a paymentMilestones array; for a principal-based MCF, add mcfPrincipalSlots (2 slots for a 12-month contract, 3 for longer)."
+          }
+        },
+        {
           "name": "Delete Quote",
           "request": {
             "method": "DELETE",

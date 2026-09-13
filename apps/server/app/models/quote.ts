@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon'
-import { BaseModel, belongsTo, column, hasMany, manyToMany } from '@adonisjs/lucid/orm'
-import type { BelongsTo, HasMany, ManyToMany } from '@adonisjs/lucid/types/relations'
+import { BaseModel, belongsTo, column, hasMany, hasOne, manyToMany } from '@adonisjs/lucid/orm'
+import type { BelongsTo, HasMany, HasOne, ManyToMany } from '@adonisjs/lucid/types/relations'
 import User from '#models/user'
 import Country from '#models/country'
 import UseCase from '#models/use_case'
@@ -8,6 +8,7 @@ import IntegrationType from '#models/integration_type'
 import IcpNode from '#models/icp_node'
 import Currency from '#models/currency'
 import QuoteCorridor from '#models/quote_corridor'
+import QuoteSetupFee from '#models/quote_setup_fee'
 
 export type QuoteStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'closed'
 
@@ -126,6 +127,9 @@ export default class Quote extends BaseModel {
 
   @hasMany(() => QuoteCorridor)
   declare corridors: HasMany<typeof QuoteCorridor>
+
+  @hasOne(() => QuoteSetupFee)
+  declare setupFee: HasOne<typeof QuoteSetupFee>
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

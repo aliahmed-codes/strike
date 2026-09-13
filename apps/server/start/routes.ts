@@ -13,6 +13,7 @@ const AuthController = () => import('#controllers/auth_controller')
 const ReferenceDataController = () => import('#controllers/reference_data_controller')
 const QuotesController = () => import('#controllers/quotes_controller')
 const QuoteCorridorsController = () => import('#controllers/quote_corridors_controller')
+const SetupFeeController = () => import('#controllers/setup_fee_controller')
 
 router.get('/', async () => {
   return {
@@ -53,6 +54,9 @@ router
     router.post('/:quoteId/corridors', [QuoteCorridorsController, 'store'])
     router.patch('/:quoteId/corridors/:id', [QuoteCorridorsController, 'update'])
     router.delete('/:quoteId/corridors/:id', [QuoteCorridorsController, 'destroy'])
+
+    router.get('/:quoteId/setup-fee', [SetupFeeController, 'show'])
+    router.put('/:quoteId/setup-fee', [SetupFeeController, 'update'])
   })
   .prefix('/quotes')
   .use(middleware.auth())

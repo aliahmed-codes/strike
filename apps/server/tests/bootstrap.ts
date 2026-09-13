@@ -37,6 +37,13 @@ export const configureSuite: Config['configureSuite'] = (suite) => {
   }
 
   if (suite.name === 'functional') {
-    suite.onGroup((group) => group.each.setup(() => testUtils.db().truncate()))
+    // A global transaction rolled back per test, not truncate(). Truncate
+    // issues a concurrent `TRUNCATE ... CASCADE` per table (Promise.all in
+    // Lucid's db:truncate command) — with enough interlocking foreign keys
+    // (crossed that threshold with the Setup Fee tables) that occasionally
+    // deadlocks, or worse, hangs the whole run with two connections stuck
+    // idle-in-transaction waiting on each other. A transaction-per-test has
+    // no such risk and is faster besides.
+    suite.onGroup((group) => group.each.setup(() => testUtils.db().withGlobalTransaction()))
   }
 }
