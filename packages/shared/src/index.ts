@@ -1,2 +1,4 @@
 export * from './types/auth.js'
 export * from './types/quote.js'
+export * from './types/setup_fee.js'
+export * from './lib/setup_fee_math.js'

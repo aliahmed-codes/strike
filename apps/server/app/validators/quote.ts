@@ -28,7 +28,6 @@ const quoteFields = {
   icpLevel2Id: vine.number().positive().exists({ table: 'icp_nodes', column: 'id' }).optional(),
   icpLevel3Id: vine.number().positive().exists({ table: 'icp_nodes', column: 'id' }).optional(),
   contractLengthYears: vine.number().min(1).max(20).optional(),
-  waivedMonths: vine.number().min(0).max(24).optional(),
   partnerPrCode: vine.string().trim().maxLength(60).optional(),
   showFxSourceInContract: vine.boolean().optional(),
   showFxSpreadInContract: vine.boolean().optional(),

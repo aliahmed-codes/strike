@@ -71,9 +71,6 @@ export default class Quote extends BaseModel {
   declare contractLengthYears: number | null
 
   @column()
-  declare waivedMonths: number
-
-  @column()
   declare partnerPrCode: string | null
 
   @column()

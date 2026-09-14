@@ -28,7 +28,6 @@ export default class extends BaseSchema {
         .inTable('integration_types')
       table.integer('icp_node_id').unsigned().nullable().references('id').inTable('icp_nodes')
       table.integer('contract_length_years').nullable()
-      table.integer('waived_months').notNullable().defaultTo(0)
       table.string('partner_pr_code', 60).nullable()
       table
         .integer('funding_currency_id')

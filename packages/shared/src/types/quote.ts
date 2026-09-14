@@ -106,7 +106,6 @@ export interface QuoteFields {
   icpLevel2Id?: number | null
   icpLevel3Id?: number | null
   contractLengthYears?: number | null
-  waivedMonths?: number
   partnerPrCode?: string | null
   showFxSourceInContract?: boolean
   showFxSpreadInContract?: boolean

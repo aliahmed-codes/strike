@@ -1,8 +1,16 @@
+import {
+  MAX_WAIVED_MONTHS,
+  TOTAL_CONTRACT_VALUE_APPROVAL_THRESHOLD_USD,
+  WAIVED_MONTHS_APPROVAL_THRESHOLD,
+  YEAR1_REVENUE_APPROVAL_THRESHOLD_USD,
+  computeSetupFeeTotals,
+} from '@strike/shared'
+
 /**
  * All Setup Fee business rules — thresholds, approval logic, and the
- * commitment-fee schedule math — live here, computed by the backend and
- * never trusted from the client. This deliberately fixes several real gaps
- * found in the old app (see FEATURES.md Phase 2 investigation notes):
+ * commitment-fee schedule math — computed by the backend and never trusted
+ * from the client. This deliberately fixes several real gaps found in the
+ * old app (see FEATURES.md Phase 2 investigation notes):
  *  - it validated nothing server-side (a client could persist an internally
  *    inconsistent state — percentages not summing to 100%, waived months
  *    past its own stated cap, etc.);
@@ -11,12 +19,18 @@
  *  - it carried two contradictory revenue-threshold constants ($75k/$150k
  *    actually enforced vs. an unused $45k/$75k pair with stale comments).
  * This file uses one canonical set of thresholds and checks every fee.
+ *
+ * The actual commitment-fee schedule math lives in `@strike/shared` (not
+ * duplicated here) so the frontend can show the exact same live preview
+ * numbers before saving, without the two ever drifting apart.
  */
 
-export const YEAR1_REVENUE_APPROVAL_THRESHOLD_USD = 75_000
-export const TOTAL_CONTRACT_VALUE_APPROVAL_THRESHOLD_USD = 150_000
-export const WAIVED_MONTHS_APPROVAL_THRESHOLD = 4
-export const MAX_WAIVED_MONTHS = 6
+export {
+  MAX_WAIVED_MONTHS,
+  TOTAL_CONTRACT_VALUE_APPROVAL_THRESHOLD_USD,
+  WAIVED_MONTHS_APPROVAL_THRESHOLD,
+  YEAR1_REVENUE_APPROVAL_THRESHOLD_USD,
+}
 
 export type FeeType = 'setup' | 'network'
 export type PaymentSchedule = 'full' | 'custom'
@@ -109,22 +123,6 @@ function otherFeeDefault(conceptCode: string, opportunityType: string | null): n
   return isNewPartner(opportunityType) ? (NEW_PARTNER_OTHER_FEE_DEFAULTS[conceptCode] ?? 0) : 0
 }
 
-/** Which block a given contract month falls into: year 1 splits into two halves, later years are one block each. */
-function blockKeyForMonth(month: number): string {
-  if (month <= 6) return 'y1_h1'
-  if (month <= 12) return 'y1_h2'
-  const year = Math.ceil(month / 12)
-  return `y${year}`
-}
-
-function principalFeeForMonth(slots: McfPrincipalSlotInput[], month: number): number {
-  const slot = slots.find(
-    (s) => month >= s.startMonth && (s.endMonth === undefined || month <= s.endMonth)
-  )
-  if (!slot) return 0
-  return slot.monthlyPrincipal * (slot.ratePct / 100)
-}
-
 /**
  * Hard validation the client can't be trusted to have done (Vine handles
  * shapes/ranges; this handles cross-field consistency). Returns an empty
@@ -158,32 +156,22 @@ export function validateSetupFeeConsistency(inputs: SetupFeeInputs): string[] {
 }
 
 export function computeSetupFee(inputs: SetupFeeInputs): SetupFeeComputed {
-  const totalMonths = Math.max(1, inputs.contractLengthYears * 12)
-
-  const finalCommitmentFee =
-    inputs.mcfType === 'principal'
-      ? principalFeeForMonth(inputs.mcfPrincipalSlots, 1)
-      : inputs.standardCommitmentFee * (1 - inputs.commitmentFeeDiscountPct / 100)
-
-  const blockFeeByKey = new Map(inputs.mcfBlockFees.map((b) => [b.blockKey, b.commitmentFee]))
-
-  let totalCommitmentFees = 0
-  let year1CommitmentFees = 0
-  for (let month = 1; month <= totalMonths; month += 1) {
-    let fee: number
-    if (inputs.mcfType === 'principal') {
-      fee = principalFeeForMonth(inputs.mcfPrincipalSlots, month)
-    } else {
-      fee = blockFeeByKey.get(blockKeyForMonth(month)) ?? finalCommitmentFee
-    }
-    if (month <= inputs.waivedMonths) fee = 0
-
-    totalCommitmentFees += fee
-    if (month <= 12) year1CommitmentFees += fee
-  }
-
-  const year1CommittedRevenue = inputs.quotedPrice + year1CommitmentFees
-  const totalContractValue = inputs.quotedPrice + totalCommitmentFees
+  const {
+    finalCommitmentFee,
+    totalCommitmentFees,
+    year1CommitmentFees,
+    year1CommittedRevenue,
+    totalContractValue,
+  } = computeSetupFeeTotals({
+    quotedPrice: inputs.quotedPrice,
+    mcfType: inputs.mcfType,
+    standardCommitmentFee: inputs.standardCommitmentFee,
+    commitmentFeeDiscountPct: inputs.commitmentFeeDiscountPct,
+    mcfPrincipalSlots: inputs.mcfPrincipalSlots,
+    mcfBlockFees: inputs.mcfBlockFees,
+    waivedMonths: inputs.waivedMonths,
+    contractLengthYears: inputs.contractLengthYears,
+  })
 
   const approvalReasons: string[] = []
 
@@ -232,11 +220,11 @@ export function computeSetupFee(inputs: SetupFeeInputs): SetupFeeComputed {
   }
 
   return {
-    finalCommitmentFee: round(finalCommitmentFee, 2),
-    totalCommitmentFees: round(totalCommitmentFees, 2),
-    year1CommitmentFees: round(year1CommitmentFees, 2),
-    year1CommittedRevenue: round(year1CommittedRevenue, 2),
-    totalContractValue: round(totalContractValue, 2),
+    finalCommitmentFee,
+    totalCommitmentFees,
+    year1CommitmentFees,
+    year1CommittedRevenue,
+    totalContractValue,
     needsApproval: approvalReasons.length > 0,
     approvalReasons,
   }

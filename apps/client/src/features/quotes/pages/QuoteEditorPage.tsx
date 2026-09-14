@@ -7,6 +7,7 @@ import { useCreateQuote, useQuote, useUpdateQuote } from '../api/useQuotes'
 import { useQuoteWorkspaceStore } from '../store/useQuoteWorkspaceStore'
 import { SummaryTab } from '../components/SummaryTab'
 import { PricingTab } from '../components/PricingTab'
+import { SetupFeeTab } from '../components/SetupFeeTab'
 import { PlaceholderTab } from '../components/PlaceholderTab'
 
 export function QuoteEditorPage() {
@@ -97,7 +98,11 @@ export function QuoteEditorPage() {
           />
         </TabsContent>
         <TabsContent value="setup-fee" className="mt-4">
-          <PlaceholderTab title="Setup Fee" />
+          <SetupFeeTab
+            quoteId={tab.quoteId}
+            contractLengthYears={quote?.contractLengthYears ?? 1}
+            opportunityType={quote?.opportunityType ?? null}
+          />
         </TabsContent>
         <TabsContent value="pricing" className="mt-4">
           <PricingTab tabKey={tabKey} quoteId={tab.quoteId} />

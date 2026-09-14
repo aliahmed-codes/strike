@@ -140,7 +140,6 @@ export function SummaryTab({
     'contractLengthYears',
     null
   )
-  const [waivedMonths, setWaivedMonths] = useQuoteFormField(tabKey, quote?.waivedMonths, 'waivedMonths', 0)
   const [partnerPrCode, setPartnerPrCode] = useQuoteFormField(
     tabKey,
     quote?.partnerPrCode,
@@ -299,14 +298,6 @@ export function SummaryTab({
               min={1}
               value={contractLengthYears ?? ''}
               onChange={(e) => setContractLengthYears(e.target.value ? Number(e.target.value) : null)}
-            />
-          </FormField>
-          <FormField label="Waived Months (Commitment fee)">
-            <Input
-              type="number"
-              min={0}
-              value={waivedMonths}
-              onChange={(e) => setWaivedMonths(Number(e.target.value))}
             />
           </FormField>
           <FormField label="PR Code" caption="Internal tracking field for CRM systems">
