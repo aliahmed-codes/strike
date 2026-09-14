@@ -127,7 +127,9 @@ Order: (1) and (2) first — small, and they change real numbers users see today
 
 **Deliberately not replicated** (documented in the service file, not guessed at): the old app's Cost-Plus-with-partner-revenue-share FX branch (needs a Market-Based-Pricing "partner share" input we don't have), a EUR→XAF/XOF zero-spread special case (undocumented currency-pair quirk), and an "FX spread below minimum spread" approval check (the old app's own code never actually populates that minimum from real data either — a dead path in the source).
 
-16 new/updated unit tests + all 65 backend tests passing. Postman collection and frontend display of these new fields (FX Margin %, Margin Fee, Gross Margin %, split approval badges) are next, once the backend is committed.
+16 new/updated unit tests + all 65 backend tests passing. Postman collection updated.
+
+**Frontend: done, not yet tested by the user.** `computeCorridorPricing` moved into `packages/shared/src/lib/corridor_pricing_math.ts` (same pattern as Setup Fee's shared math module) so the Pricing tab can show a genuinely live preview using the exact function the backend uses to validate on save. Pricing tab now shows FX Margin %, Margin Fee, and Gross Margin % columns, and splits the old single "Needs Approval" flag into two independently-clickable badges (Financial / Network), each opening a popover with its own specific reasons. Real-time preview matches the old app's live behavior in two places: the "Add a Corridor" form shows a live-computed preview panel before you click Add, and each existing corridor row recomputes its own preview live as you type in its inline-edit fields, saving for real only on blur. Test plan: `docs/test-plans/pricing-tab-phase1b.md`.
 
 ### Phase 2 — Setup Fee — ✔ backend and frontend done, tested, committed
 

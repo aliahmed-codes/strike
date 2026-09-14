@@ -58,6 +58,13 @@ export interface Corridor {
   receivingPartner: string
   payoutCurrencyId: number
   payoutCurrency?: Currency
+  fxSource: string | null
+  treasuryFxCostSpread: number | null
+  costFixedUsd: number | null
+  costVariablePct: number | null
+  networkNeedApprovalRaw: string | null
+  internalRaw: string | null
+  centralBankRaw: string | null
 }
 
 export interface QuoteCorridorInput {
@@ -87,6 +94,10 @@ export interface QuoteCorridor extends QuoteCorridorInput {
   computedAt: string | null
   needsApproval: boolean
   approvalReasons: string[] | null
+  needsFinancialApproval: boolean
+  financialApprovalReasons: string[] | null
+  needsNetworkApproval: boolean
+  networkApprovalReasons: string[] | null
   corridor?: Corridor
   fundingCurrency?: Currency
 }
