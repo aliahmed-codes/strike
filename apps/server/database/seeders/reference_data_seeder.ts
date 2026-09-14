@@ -45,6 +45,32 @@ interface RealCorridor {
   receivingPartner: string
 }
 
+/**
+ * Real per-corridor pricing/cost/compliance master data — FX Source,
+ * Treasury FX cost, cost basis, and the Need Approval/Internal/Central Bank
+ * network-approval fields — exported from the old app's live
+ * `corridors_list.corridor_details` (its currently-active catalog version)
+ * and matched to our corridors on the same natural key used to dedupe them
+ * below. See FEATURES.md Phase 1b. 8 of our 1,271 corridors have no match
+ * (catalog drift since Phase 1's original corridor export) and are left
+ * null — the pricing service treats null as "data unavailable", not "no
+ * cost"/"no approval needed".
+ */
+interface RealCorridorPricingData {
+  countryCode: string | null
+  service: string | null
+  transactionType: string | null
+  payer: string | null
+  payoutCurrencyCode: string | null
+  fxSource: string | null
+  treasuryFxCostSpread: number | null
+  costFixedUsd: number | null
+  costVariablePct: number | null
+  networkNeedApprovalRaw: string | null
+  internalRaw: string | null
+  centralBankRaw: string | null
+}
+
 const CURRENCY_META: Record<
   string,
   {
@@ -1087,5 +1113,45 @@ export default class extends BaseSeeder {
       ['countryId', 'serviceCode', 'transactionTypeCode', 'payerCode', 'payoutCurrencyId'],
       Array.from(corridorRowsByKey.values())
     )
+
+    // 9. Backfill real pricing/cost/compliance master data onto those same
+    // corridors, matched by the old catalog's own natural key (country ISO
+    // code + service + transaction type + payer + payout currency ISO code).
+    const pricingData = readJson<RealCorridorPricingData[]>('real_corridor_pricing_data.json')
+    const pricingByKey = new Map(
+      pricingData.map((row) => [
+        [row.countryCode, row.service, row.transactionType, row.payer, row.payoutCurrencyCode].join(
+          '|'
+        ),
+        row,
+      ])
+    )
+
+    const isoByCountryId = Object.fromEntries(countries.map((c) => [c.id, c.isoCode3]))
+    const isoByCurrencyId = Object.fromEntries(currencies.map((c) => [c.id, c.isoCode3]))
+    const seededCorridors = await Corridor.all()
+
+    for (const corridor of seededCorridors) {
+      const key = [
+        isoByCountryId[corridor.countryId],
+        corridor.serviceCode,
+        corridor.transactionTypeCode,
+        corridor.payerCode,
+        isoByCurrencyId[corridor.payoutCurrencyId],
+      ].join('|')
+      const pricing = pricingByKey.get(key)
+      if (!pricing) continue
+
+      corridor.merge({
+        fxSource: pricing.fxSource,
+        treasuryFxCostSpread: pricing.treasuryFxCostSpread,
+        costFixedUsd: pricing.costFixedUsd,
+        costVariablePct: pricing.costVariablePct,
+        networkNeedApprovalRaw: pricing.networkNeedApprovalRaw,
+        internalRaw: pricing.internalRaw,
+        centralBankRaw: pricing.centralBankRaw,
+      })
+      await corridor.save()
+    }
   }
 }

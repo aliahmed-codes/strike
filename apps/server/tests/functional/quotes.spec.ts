@@ -41,6 +41,15 @@ async function createCorridor() {
     payerCode: 'test_payer',
     receivingPartner: 'test_partner',
     payoutCurrencyId: currency.id,
+    // Clean master data (no network restrictions) so tests exercise pricing
+    // math, not the "no catalog data — verify manually" network-approval path.
+    fxSource: 'Cost Plus',
+    treasuryFxCostSpread: 0,
+    costFixedUsd: 0,
+    costVariablePct: 0,
+    networkNeedApprovalRaw: 'No',
+    internalRaw: 'None',
+    centralBankRaw: 'None',
   })
 }
 

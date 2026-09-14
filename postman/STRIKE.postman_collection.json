@@ -222,7 +222,7 @@
               "host": ["{{base_url}}"],
               "path": ["quotes", "{{quote_id}}", "corridors"]
             },
-            "description": "Adds a corridor from the catalog to the quote. The backend computes revenue/margin/take-rate and flags needs_approval — none of that is trusted from the request body. Run \"List Corridors (catalog)\" first to populate {{corridor_id}}."
+            "description": "Adds a corridor from the catalog to the quote. The backend computes revenue/FX margin/margin fee/gross margin/take-rate using the corridor's real cost/FX-source master data, and flags approval via two independent checks: needs_financial_approval (margin/pricing rules, with financial_approval_reasons) and needs_network_approval (a lookup on the corridor catalog's own Need Approval/Internal/Central Bank fields, with network_approval_reasons) — needs_approval/approval_reasons remain the combined OR of both for backward compatibility. None of this is trusted from the request body. Run \"List Corridors (catalog)\" first to populate {{corridor_id}}."
           },
           "event": [
             {
@@ -251,7 +251,7 @@
               "host": ["{{base_url}}"],
               "path": ["quotes", "{{quote_id}}", "corridors", "{{quote_corridor_id}}"]
             },
-            "description": "Updates pricing inputs for a corridor already on the quote — the backend recomputes revenue/margin/take-rate from the merged values."
+            "description": "Updates pricing inputs for a corridor already on the quote — the backend recomputes revenue/FX margin/margin fee/gross margin/take-rate and both approval checks (financial + network, see \"Add Corridor to Quote\") from the merged values."
           }
         },
         {

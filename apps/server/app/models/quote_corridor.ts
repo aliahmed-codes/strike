@@ -88,6 +88,22 @@ export default class QuoteCorridor extends BaseModel {
   })
   declare approvalReasons: string[] | null
 
+  @column()
+  declare needsFinancialApproval: boolean
+
+  @column({
+    prepare: (value: string[] | null) => (value ? JSON.stringify(value) : null),
+  })
+  declare financialApprovalReasons: string[] | null
+
+  @column()
+  declare needsNetworkApproval: boolean
+
+  @column({
+    prepare: (value: string[] | null) => (value ? JSON.stringify(value) : null),
+  })
+  declare networkApprovalReasons: string[] | null
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

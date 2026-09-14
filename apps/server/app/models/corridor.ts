@@ -32,6 +32,27 @@ export default class Corridor extends BaseModel {
   @belongsTo(() => Currency, { foreignKey: 'payoutCurrencyId' })
   declare payoutCurrency: BelongsTo<typeof Currency>
 
+  @column()
+  declare fxSource: string | null
+
+  @column()
+  declare treasuryFxCostSpread: number | null
+
+  @column()
+  declare costFixedUsd: number | null
+
+  @column()
+  declare costVariablePct: number | null
+
+  @column()
+  declare networkNeedApprovalRaw: string | null
+
+  @column()
+  declare internalRaw: string | null
+
+  @column()
+  declare centralBankRaw: string | null
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

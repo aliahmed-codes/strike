@@ -3,9 +3,22 @@ import { DateTime } from 'luxon'
 import type User from '#models/user'
 import Quote from '#models/quote'
 import QuoteCorridor from '#models/quote_corridor'
+import Corridor from '#models/corridor'
 import { canAccessQuote } from '#services/quote_access_service'
-import { computeCorridorPricing } from '#services/quote_pricing_service'
+import { computeCorridorPricing, type CorridorMasterData } from '#services/quote_pricing_service'
 import { createQuoteCorridorValidator, updateQuoteCorridorValidator } from '#validators/quote'
+
+function masterDataFor(corridor: Corridor): CorridorMasterData {
+  return {
+    fxSource: corridor.fxSource,
+    treasuryFxCostSpread: corridor.treasuryFxCostSpread,
+    costFixedUsd: corridor.costFixedUsd,
+    costVariablePct: corridor.costVariablePct,
+    networkNeedApprovalRaw: corridor.networkNeedApprovalRaw,
+    internalRaw: corridor.internalRaw,
+    centralBankRaw: corridor.centralBankRaw,
+  }
+}
 
 async function loadEditableQuote(quoteId: number, user: User) {
   const quote = await Quote.find(quoteId)
@@ -39,6 +52,8 @@ export default class QuoteCorridorsController {
       return response.conflict({ message: 'This corridor has already been added to the quote' })
     }
 
+    const corridor = await Corridor.findOrFail(payload.corridorId)
+
     const pricing = computeCorridorPricing({
       yearlyVolumeUsd: payload.yearlyVolumeUsd,
       yearlyTransactions: payload.yearlyTransactions,
@@ -46,6 +61,11 @@ export default class QuoteCorridorsController {
       variableFeePct: payload.variableFeePct,
       appliedFxSpread: payload.appliedFxSpread,
       feeDiscountPct: payload.feeDiscountPct ?? 0,
+      transactionTypeCode: corridor.transactionTypeCode,
+      fundingCurrencyId: payload.fundingCurrencyId ?? null,
+      payoutCurrencyId: corridor.payoutCurrencyId,
+      opportunityType: quote!.opportunityType,
+      corridor: masterDataFor(corridor),
     })
 
     const quoteCorridor = await QuoteCorridor.create({
@@ -68,7 +88,7 @@ export default class QuoteCorridorsController {
 
   async update({ auth, params, request, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const { error } = await loadEditableQuote(params.quoteId, user)
+    const { quote, error } = await loadEditableQuote(params.quoteId, user)
     if (error) return response.status(error.status).send({ message: error.message })
 
     const quoteCorridor = await QuoteCorridor.query()
@@ -82,6 +102,8 @@ export default class QuoteCorridorsController {
     const payload = await request.validateUsing(updateQuoteCorridorValidator)
     quoteCorridor.merge(payload)
 
+    const corridor = await Corridor.findOrFail(quoteCorridor.corridorId)
+
     const pricing = computeCorridorPricing({
       yearlyVolumeUsd: quoteCorridor.yearlyVolumeUsd,
       yearlyTransactions: quoteCorridor.yearlyTransactions,
@@ -89,6 +111,11 @@ export default class QuoteCorridorsController {
       variableFeePct: quoteCorridor.variableFeePct,
       appliedFxSpread: quoteCorridor.appliedFxSpread,
       feeDiscountPct: quoteCorridor.feeDiscountPct,
+      transactionTypeCode: corridor.transactionTypeCode,
+      fundingCurrencyId: quoteCorridor.fundingCurrencyId,
+      payoutCurrencyId: corridor.payoutCurrencyId,
+      opportunityType: quote!.opportunityType,
+      corridor: masterDataFor(corridor),
     })
     quoteCorridor.merge({ ...pricing, computedAt: DateTime.now() })
     await quoteCorridor.save()
