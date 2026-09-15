@@ -86,9 +86,21 @@ const corridorPricingFields = {
   feeDiscountPct: vine.number().min(0).max(100).optional(),
 }
 
+const PRICING_MODELS = ['standard', 'tiered'] as const
+
+const corridorTierFields = vine.object({
+  tierNumber: vine.number().min(1).max(3),
+  yearlyVolumeUsd: vine.number().min(0),
+  fixedFeeUsd: vine.number().min(0),
+  variableFeePct: vine.number().min(0).max(100),
+  appliedFxSpread: vine.number().min(0).max(100),
+})
+
 export const createQuoteCorridorValidator = vine.compile(
   vine.object({
     corridorId: vine.number().positive().exists({ table: 'corridors', column: 'id' }),
+    pricingModel: vine.enum(PRICING_MODELS).optional(),
+    tiers: vine.array(corridorTierFields).optional(),
     ...corridorPricingFields,
   })
 )
@@ -107,5 +119,7 @@ export const updateQuoteCorridorValidator = vine.compile(
     variableFeePct: vine.number().min(0).max(100).optional(),
     appliedFxSpread: vine.number().min(0).max(100).optional(),
     feeDiscountPct: vine.number().min(0).max(100).optional(),
+    pricingModel: vine.enum(PRICING_MODELS).optional(),
+    tiers: vine.array(corridorTierFields).optional(),
   })
 )

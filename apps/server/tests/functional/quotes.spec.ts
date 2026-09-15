@@ -471,3 +471,161 @@ test.group('Quote corridors', () => {
     response.assertStatus(409)
   })
 })
+
+test.group('Quote corridors: tiered pricing', () => {
+  test('adds a tiered corridor and prices each tier plus the standard remainder', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        corridorId: corridor.id,
+        atvUsd: 500,
+        yearlyVolumeUsd: 1_000_000,
+        yearlyTransactions: 2_000,
+        fixedFeeUsd: 1,
+        variableFeePct: 1,
+        appliedFxSpread: 1,
+        pricingModel: 'tiered',
+        tiers: [
+          {
+            tierNumber: 1,
+            yearlyVolumeUsd: 400_000,
+            fixedFeeUsd: 0.5,
+            variableFeePct: 0.5,
+            appliedFxSpread: 0.5,
+          },
+        ],
+      })
+
+    response.assertStatus(201)
+    assert.equal(response.body().pricingModel, 'tiered')
+    assert.equal(response.body().tiers.length, 1)
+    assert.equal(response.body().tiers[0].tierNumber, 1)
+    assert.equal(response.body().tiers[0].yearlyVolumeUsd, 400_000)
+    assert.isTrue(response.body().totalRevenue > 0)
+  })
+
+  test('rejects tiers that sum to more than the corridor total volume', async ({ client }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        corridorId: corridor.id,
+        atvUsd: 500,
+        yearlyVolumeUsd: 1_000_000,
+        yearlyTransactions: 2_000,
+        fixedFeeUsd: 1,
+        variableFeePct: 1,
+        appliedFxSpread: 1,
+        pricingModel: 'tiered',
+        tiers: [
+          {
+            tierNumber: 1,
+            yearlyVolumeUsd: 700_000,
+            fixedFeeUsd: 0.5,
+            variableFeePct: 0.5,
+            appliedFxSpread: 0.5,
+          },
+          {
+            tierNumber: 2,
+            yearlyVolumeUsd: 500_000,
+            fixedFeeUsd: 0.4,
+            variableFeePct: 0.4,
+            appliedFxSpread: 0.4,
+          },
+        ],
+      })
+
+    response.assertStatus(422)
+  })
+
+  test('re-prices existing tiers when the corridor total volume changes without resending tiers', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+
+    const created = await client
+      .post(`/quotes/${quote.id}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        corridorId: corridor.id,
+        atvUsd: 500,
+        yearlyVolumeUsd: 1_000_000,
+        yearlyTransactions: 2_000,
+        fixedFeeUsd: 1,
+        variableFeePct: 1,
+        appliedFxSpread: 1,
+        pricingModel: 'tiered',
+        tiers: [
+          {
+            tierNumber: 1,
+            yearlyVolumeUsd: 200_000,
+            fixedFeeUsd: 0.5,
+            variableFeePct: 0.5,
+            appliedFxSpread: 0.5,
+          },
+        ],
+      })
+
+    const response = await client
+      .patch(`/quotes/${quote.id}/corridors/${created.body().id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ yearlyVolumeUsd: 2_000_000 })
+
+    response.assertStatus(200)
+    assert.equal(response.body().tiers.length, 1)
+    assert.equal(response.body().tiers[0].yearlyVolumeUsd, 200_000)
+  })
+
+  test('switching a corridor back to standard clears its tier rows', async ({ client, assert }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+
+    const created = await client
+      .post(`/quotes/${quote.id}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        corridorId: corridor.id,
+        atvUsd: 500,
+        yearlyVolumeUsd: 1_000_000,
+        yearlyTransactions: 2_000,
+        fixedFeeUsd: 1,
+        variableFeePct: 1,
+        appliedFxSpread: 1,
+        pricingModel: 'tiered',
+        tiers: [
+          {
+            tierNumber: 1,
+            yearlyVolumeUsd: 200_000,
+            fixedFeeUsd: 0.5,
+            variableFeePct: 0.5,
+            appliedFxSpread: 0.5,
+          },
+        ],
+      })
+
+    const response = await client
+      .patch(`/quotes/${quote.id}/corridors/${created.body().id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ pricingModel: 'standard' })
+
+    response.assertStatus(200)
+    assert.equal(response.body().pricingModel, 'standard')
+    assert.equal(response.body().tiers.length, 0)
+  })
+})

@@ -83,6 +83,7 @@ export default class QuotesController {
     await quote.load('corridors', (q) => {
       q.preload('corridor', (cq) => cq.preload('country').preload('payoutCurrency'))
       q.preload('fundingCurrency')
+      q.preload('tiers', (tq) => tq.orderBy('tierNumber'))
     })
 
     return response.ok({

@@ -1,8 +1,15 @@
-import { computeCorridorPricing } from '@strike/shared'
+import {
+  computeCorridorPricing,
+  computeTieredCorridorPricing,
+  validateTierAllocation,
+} from '@strike/shared'
 import type {
   CorridorMasterData,
   CorridorPricingInputs,
   CorridorPricingResult,
+  CorridorTierInput,
+  TieredCorridorPricingInputs,
+  TieredCorridorPricingResult,
 } from '@strike/shared'
 
 /**
@@ -18,8 +25,15 @@ import type {
  * saving, without the two ever drifting apart — see FEATURES.md Phase 1b
  * for the formula-derivation notes and what's deliberately not replicated.
  */
-export { computeCorridorPricing }
-export type { CorridorMasterData, CorridorPricingInputs, CorridorPricingResult }
+export { computeCorridorPricing, computeTieredCorridorPricing, validateTierAllocation }
+export type {
+  CorridorMasterData,
+  CorridorPricingInputs,
+  CorridorPricingResult,
+  CorridorTierInput,
+  TieredCorridorPricingInputs,
+  TieredCorridorPricingResult,
+}
 
 /** Only the fields computeQuoteTotals actually needs — decoupled from the Lucid model so it's trivial to unit test. */
 export interface PricedCorridor {

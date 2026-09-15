@@ -1,9 +1,10 @@
 import { DateTime } from 'luxon'
-import { BaseModel, belongsTo, column } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import { BaseModel, belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
+import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import Quote from '#models/quote'
 import Corridor from '#models/corridor'
 import Currency from '#models/currency'
+import QuoteCorridorTier from '#models/quote_corridor_tier'
 
 export default class QuoteCorridor extends BaseModel {
   @column({ isPrimary: true })
@@ -48,6 +49,12 @@ export default class QuoteCorridor extends BaseModel {
 
   @column()
   declare feeDiscountPct: number
+
+  @column()
+  declare pricingModel: 'standard' | 'tiered'
+
+  @hasMany(() => QuoteCorridorTier)
+  declare tiers: HasMany<typeof QuoteCorridorTier>
 
   // Outputs — written only by QuotePricingService
   @column()

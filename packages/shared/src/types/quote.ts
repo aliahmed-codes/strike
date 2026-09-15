@@ -67,6 +67,32 @@ export interface Corridor {
   centralBankRaw: string | null
 }
 
+export type PricingModel = 'standard' | 'tiered'
+
+export interface CorridorTierInput {
+  tierNumber: number
+  yearlyVolumeUsd: number
+  fixedFeeUsd: number
+  variableFeePct: number
+  appliedFxSpread: number
+}
+
+export interface QuoteCorridorTier extends CorridorTierInput {
+  id: number
+  quoteCorridorId: number
+  yearlyTransactions: number | null
+  revenueFee: number | null
+  fxMargin: number | null
+  fxMarginPct: number | null
+  marginFee: number | null
+  totalRevenue: number | null
+  totalMargin: number | null
+  grossMarginPct: number | null
+  takeRatePct: number | null
+  needsApproval: boolean
+  approvalReasons: string[] | null
+}
+
 export interface QuoteCorridorInput {
   corridorId: number
   fundingCurrencyId?: number | null
@@ -77,11 +103,14 @@ export interface QuoteCorridorInput {
   variableFeePct: number
   appliedFxSpread: number
   feeDiscountPct?: number
+  pricingModel?: PricingModel
+  tiers?: CorridorTierInput[]
 }
 
 export interface QuoteCorridor extends QuoteCorridorInput {
   id: number
   quoteId: number
+  pricingModel: PricingModel
   revenueFee: number | null
   fxMargin: number | null
   fxMarginPct: number | null
@@ -100,6 +129,7 @@ export interface QuoteCorridor extends QuoteCorridorInput {
   networkApprovalReasons: string[] | null
   corridor?: Corridor
   fundingCurrency?: Currency
+  tiers?: QuoteCorridorTier[]
 }
 
 export type FxModel = 'traditional_fx' | 'trading_desk' | 'both_models'
