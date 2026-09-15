@@ -25,6 +25,8 @@ export interface Currency {
   isFee: boolean
   isHard: boolean
   isPegged: boolean
+  /** A static USD conversion rate for displaying a fee in this currency — null for the ~180 currencies the old app's own rate table never covered (never a fabricated 1:1 fallback). */
+  feeConversionRateToUsd: number | null
 }
 
 export interface UseCase {
@@ -65,6 +67,11 @@ export interface Corridor {
   networkNeedApprovalRaw: string | null
   internalRaw: string | null
   centralBankRaw: string | null
+  /** The catalog's own suggested fee, for comparison against what's actually being quoted — null where the old app's own data doesn't have one. */
+  stdFixedFeeUsd: number | null
+  stdVariableFeePct: number | null
+  /** A real historical average transaction value for this corridor — null for the ~49% the old app's own ATV data never covered. */
+  historicalAtv: number | null
 }
 
 export type PricingModel = 'standard' | 'tiered'
@@ -85,8 +92,10 @@ export interface QuoteCorridorTier extends CorridorTierInput {
   fxMargin: number | null
   fxMarginPct: number | null
   marginFee: number | null
+  marginFeePct: number | null
   totalRevenue: number | null
   totalMargin: number | null
+  marginPct: number | null
   grossMarginPct: number | null
   takeRatePct: number | null
   needsApproval: boolean
@@ -115,6 +124,7 @@ export interface QuoteCorridor extends QuoteCorridorInput {
   fxMargin: number | null
   fxMarginPct: number | null
   marginFee: number | null
+  marginFeePct: number | null
   totalRevenue: number | null
   totalMargin: number | null
   marginPct: number | null

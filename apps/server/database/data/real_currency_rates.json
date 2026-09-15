@@ -1,0 +1,58 @@
+[
+  {
+    "currencyCode": "AUD",
+    "rateToUsd": 1.54
+  },
+  {
+    "currencyCode": "CAD",
+    "rateToUsd": 1.4
+  },
+  {
+    "currencyCode": "CNY",
+    "rateToUsd": 7.3
+  },
+  {
+    "currencyCode": "EUR",
+    "rateToUsd": 0.93
+  },
+  {
+    "currencyCode": "GBP",
+    "rateToUsd": 0.81
+  },
+  {
+    "currencyCode": "HKD",
+    "rateToUsd": 8
+  },
+  {
+    "currencyCode": "IDR",
+    "rateToUsd": 15370
+  },
+  {
+    "currencyCode": "MXN",
+    "rateToUsd": 19
+  },
+  {
+    "currencyCode": "PHP",
+    "rateToUsd": 59
+  },
+  {
+    "currencyCode": "SAR",
+    "rateToUsd": 3.75
+  },
+  {
+    "currencyCode": "SGD",
+    "rateToUsd": 1.38
+  },
+  {
+    "currencyCode": "USD",
+    "rateToUsd": 1
+  },
+  {
+    "currencyCode": "XAF",
+    "rateToUsd": 611
+  },
+  {
+    "currencyCode": "XOF",
+    "rateToUsd": 611
+  }
+]

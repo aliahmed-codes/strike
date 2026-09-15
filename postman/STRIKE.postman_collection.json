@@ -238,6 +238,26 @@
           ]
         },
         {
+          "name": "Add Tiered Corridor to Quote",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"corridorId\": {{corridor_id}},\n  \"atvUsd\": 500,\n  \"yearlyVolumeUsd\": 1000000,\n  \"yearlyTransactions\": 2000,\n  \"fixedFeeUsd\": 1,\n  \"variableFeePct\": 1,\n  \"appliedFxSpread\": 2,\n  \"pricingModel\": \"tiered\",\n  \"tiers\": [\n    { \"tierNumber\": 1, \"yearlyVolumeUsd\": 400000, \"fixedFeeUsd\": 0.5, \"variableFeePct\": 0.5, \"appliedFxSpread\": 1 },\n    { \"tierNumber\": 2, \"yearlyVolumeUsd\": 200000, \"fixedFeeUsd\": 0.3, \"variableFeePct\": 0.3, \"appliedFxSpread\": 0.8 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/corridors",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}", "corridors"]
+            },
+            "description": "Splits a corridor's yearly volume across up to 3 tiers (each with its own fixed fee/variable fee %/FX spread), with whatever volume isn't assigned to a tier pricing at the corridor's own standard fields above. Tier 1 = smallest discount, Tier 3 = biggest. Tier volumes can never sum to more than yearlyVolumeUsd — a 422 is returned otherwise. Response includes a `tiers` array with each tier's own computed revenue/margin/approval, plus the corridor's top-level fields (revenueFee, totalRevenue, needsApproval, etc.) as the combined total across the standard remainder and every tier. Each tier's transaction count is derived from its volume ÷ atvUsd, not entered directly."
+          }
+        },
+        {
           "name": "Update Quote Corridor",
           "request": {
             "method": "PATCH",
@@ -251,7 +271,7 @@
               "host": ["{{base_url}}"],
               "path": ["quotes", "{{quote_id}}", "corridors", "{{quote_corridor_id}}"]
             },
-            "description": "Updates pricing inputs for a corridor already on the quote — the backend recomputes revenue/FX margin/margin fee/gross margin/take-rate and both approval checks (financial + network, see \"Add Corridor to Quote\") from the merged values."
+            "description": "Updates pricing inputs for a corridor already on the quote — the backend recomputes revenue/FX margin/margin fee/gross margin/take-rate and both approval checks (financial + network, see \"Add Corridor to Quote\") from the merged values. Can also include `pricingModel` (\"standard\"/\"tiered\") and `tiers` (see \"Add Tiered Corridor to Quote\") — switching to \"standard\" deletes the corridor's tier rows; omitting `tiers` while already tiered re-prices using whatever tiers are already saved (e.g. after changing yearlyVolumeUsd alone)."
           }
         },
         {

@@ -39,8 +39,11 @@ export interface CorridorPricingResult {
   fxMargin: number
   fxMarginPct: number
   marginFee: number
+  /** Margin Fee ÷ yearly volume — the fee-only margin, excluding FX margin. */
+  marginFeePct: number
   totalRevenue: number
   totalMargin: number
+  /** Total Margin ÷ yearly volume — includes FX margin when positive, unlike marginFeePct. A distinct old-app metric, not a duplicate. */
   marginPct: number
   grossMarginPct: number
   takeRatePct: number
@@ -101,7 +104,7 @@ function computeMarginFee(inputs: CorridorPricingInputs, revenueFee: number): nu
  */
 function checkFinancialApproval(
   inputs: CorridorPricingInputs,
-  totalMargin: number,
+  marginPct: number,
   grossMarginPct: number
 ): string[] {
   const reasons: string[] = []
@@ -137,13 +140,9 @@ function checkFinancialApproval(
     }
   }
 
-  const marginPctOfVolume =
-    inputs.yearlyVolumeUsd > 0 ? (totalMargin / inputs.yearlyVolumeUsd) * 100 : 0
   const marginPctThreshold = isB2B ? MARGIN_PCT_THRESHOLD_B2B : MARGIN_PCT_THRESHOLD_NON_B2B
-  if (marginPctOfVolume < marginPctThreshold) {
-    reasons.push(
-      `Margin of ${round(marginPctOfVolume, 2)}% of volume is below the ${marginPctThreshold}% minimum`
-    )
+  if (marginPct < marginPctThreshold) {
+    reasons.push(`Margin of ${round(marginPct, 2)}% of volume is below the ${marginPctThreshold}% minimum`)
   }
 
   return reasons
@@ -190,11 +189,12 @@ export function computeCorridorPricing(inputs: CorridorPricingInputs): CorridorP
   const totalMargin = fxMargin > 0 ? fxMargin + marginFee : marginFee
 
   const fxMarginPct = totalRevenue > 0 ? (fxMargin / totalRevenue) * 100 : 0
-  const marginPct = inputs.yearlyVolumeUsd > 0 ? (marginFee / inputs.yearlyVolumeUsd) * 100 : 0
+  const marginFeePct = inputs.yearlyVolumeUsd > 0 ? (marginFee / inputs.yearlyVolumeUsd) * 100 : 0
+  const marginPct = inputs.yearlyVolumeUsd > 0 ? (totalMargin / inputs.yearlyVolumeUsd) * 100 : 0
   const grossMarginPct = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0
   const takeRatePct = inputs.yearlyVolumeUsd > 0 ? (totalRevenue / inputs.yearlyVolumeUsd) * 100 : 0
 
-  const financialApprovalReasons = checkFinancialApproval(inputs, totalMargin, grossMarginPct)
+  const financialApprovalReasons = checkFinancialApproval(inputs, marginPct, grossMarginPct)
   const networkApprovalReasons = checkNetworkApproval(inputs.corridor)
   const approvalReasons = [...financialApprovalReasons, ...networkApprovalReasons]
 
@@ -203,6 +203,7 @@ export function computeCorridorPricing(inputs: CorridorPricingInputs): CorridorP
     fxMargin: round(fxMargin, 2),
     fxMarginPct: round(fxMarginPct, 4),
     marginFee: round(marginFee, 2),
+    marginFeePct: round(marginFeePct, 4),
     totalRevenue: round(totalRevenue, 2),
     totalMargin: round(totalMargin, 2),
     marginPct: round(marginPct, 4),

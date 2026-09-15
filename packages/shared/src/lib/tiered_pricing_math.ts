@@ -48,10 +48,12 @@ export interface TieredCorridorPricingResult {
   fxMargin: number
   fxMarginPct: number
   marginFee: number
+  marginFeePct: number
   totalRevenue: number
   totalMargin: number
   totalVolumeUsd: number
   totalTransactions: number
+  marginPct: number
   grossMarginPct: number
   takeRatePct: number
   needsApproval: boolean
@@ -160,6 +162,8 @@ export function computeTieredCorridorPricing(
   const totalVolumeUsd = standardVolume + tierVolumeTotal
   const totalTransactions = allSlices.reduce((sum, s) => sum + s.yearlyTransactions, 0)
   const fxMarginPct = totalRevenue > 0 ? (fxMargin / totalRevenue) * 100 : 0
+  const marginFeePct = totalVolumeUsd > 0 ? (marginFee / totalVolumeUsd) * 100 : 0
+  const marginPct = totalVolumeUsd > 0 ? (totalMargin / totalVolumeUsd) * 100 : 0
   const grossMarginPct = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0
   const takeRatePct = totalVolumeUsd > 0 ? (totalRevenue / totalVolumeUsd) * 100 : 0
 
@@ -182,10 +186,12 @@ export function computeTieredCorridorPricing(
     fxMargin: round(fxMargin, 2),
     fxMarginPct: round(fxMarginPct, 4),
     marginFee: round(marginFee, 2),
+    marginFeePct: round(marginFeePct, 4),
     totalRevenue: round(totalRevenue, 2),
     totalMargin: round(totalMargin, 2),
     totalVolumeUsd: round(totalVolumeUsd, 2),
     totalTransactions,
+    marginPct: round(marginPct, 4),
     grossMarginPct: round(grossMarginPct, 4),
     takeRatePct: round(takeRatePct, 4),
     needsFinancialApproval: financialApprovalReasons.length > 0,

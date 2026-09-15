@@ -48,6 +48,17 @@ test.group('computeCorridorPricing', () => {
     assert.equal(result.totalRevenue, 20_000)
     assert.equal(result.totalMargin, 20_000)
     assert.equal(result.takeRatePct, 2) // 20_000 / 1_000_000 * 100
+    // marginFeePct excludes FX margin (15_000 / 1_000_000 * 100); marginPct includes it (20_000 / 1_000_000 * 100) — genuinely different metrics.
+    assert.equal(result.marginFeePct, 1.5)
+    assert.equal(result.marginPct, 2)
+  })
+
+  test('marginPct and marginFeePct are equal when FX margin is not positive (no double-counting)', ({
+    assert,
+  }) => {
+    const result = computeCorridorPricing(baseInputs({ appliedFxSpread: 0 }))
+    assert.equal(result.fxMargin, 0)
+    assert.equal(result.marginPct, result.marginFeePct)
   })
 
   test('applies the fee discount to the fee-based revenue only', ({ assert }) => {

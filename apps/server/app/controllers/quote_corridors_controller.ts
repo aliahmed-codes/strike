@@ -117,12 +117,10 @@ async function priceAndSave(
     fxMargin: tiered.fxMargin,
     fxMarginPct: tiered.fxMarginPct,
     marginFee: tiered.marginFee,
+    marginFeePct: tiered.marginFeePct,
     totalRevenue: tiered.totalRevenue,
     totalMargin: tiered.totalMargin,
-    marginPct:
-      quoteCorridor.yearlyVolumeUsd > 0
-        ? (tiered.marginFee / quoteCorridor.yearlyVolumeUsd) * 100
-        : 0,
+    marginPct: tiered.marginPct,
     grossMarginPct: tiered.grossMarginPct,
     takeRatePct: tiered.takeRatePct,
     needsApproval: tiered.needsApproval,
@@ -152,8 +150,10 @@ async function priceAndSave(
       fxMargin: tierResult.fxMargin,
       fxMarginPct: tierResult.fxMarginPct,
       marginFee: tierResult.marginFee,
+      marginFeePct: tierResult.marginFeePct,
       totalRevenue: tierResult.totalRevenue,
       totalMargin: tierResult.totalMargin,
+      marginPct: tierResult.marginPct,
       grossMarginPct: tierResult.grossMarginPct,
       takeRatePct: tierResult.takeRatePct,
       needsApproval: tierResult.needsApproval,

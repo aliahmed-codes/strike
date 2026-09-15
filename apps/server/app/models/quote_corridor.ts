@@ -70,6 +70,9 @@ export default class QuoteCorridor extends BaseModel {
   declare marginFee: number | null
 
   @column()
+  declare marginFeePct: number | null
+
+  @column()
   declare totalRevenue: number | null
 
   @column()

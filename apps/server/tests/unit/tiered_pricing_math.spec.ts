@@ -124,6 +124,10 @@ test.group('computeTieredCorridorPricing', () => {
     assert.equal(result.totalRevenue, 22_000)
     assert.equal(result.tiers.length, 0)
     assert.equal(result.standard.yearlyTransactions, 2000)
+    // totalMargin = fxMargin(10_000) + marginFee(12_000, no cost data) = 22_000
+    // marginFeePct (fee-only) = 12_000 / 1_000_000 * 100 = 1.2; marginPct (incl. FX) = 22_000 / 1_000_000 * 100 = 2.2
+    assert.equal(result.marginFeePct, 1.2)
+    assert.equal(result.marginPct, 2.2)
   })
 
   test('splits volume between a tier and the standard remainder', ({ assert }) => {

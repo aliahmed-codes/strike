@@ -32,6 +32,9 @@ export default class Currency extends BaseModel {
   @column()
   declare isPegged: boolean
 
+  @column()
+  declare feeConversionRateToUsd: number | null
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

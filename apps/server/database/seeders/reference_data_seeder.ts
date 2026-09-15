@@ -69,6 +69,34 @@ interface RealCorridorPricingData {
   networkNeedApprovalRaw: string | null
   internalRaw: string | null
   centralBankRaw: string | null
+  stdFixedFeeUsd: number | null
+  stdVariableFeePct: number | null
+}
+
+/**
+ * A static, admin-maintained USD conversion rate for a handful of
+ * currencies, exported from the old app's real `currency_rates` table (an
+ * imported XE mid-market average — not a live rate feed). Only these
+ * currencies get a real conversion; every other currency is left null
+ * rather than falling back to a fake 1:1 rate.
+ */
+interface RealCurrencyRate {
+  currencyCode: string
+  rateToUsd: number
+}
+
+/**
+ * Historical average transaction value per corridor, exported from the old
+ * app's real `corridor_atv` table (its currently-active version). Keyed by
+ * service+country name+transaction type only (matching the old app's own
+ * lookup key, which doesn't include payer) — so ~51% of corridors get a
+ * real match; the rest are left null, never a fabricated 0.
+ */
+interface RealHistoricalAtv {
+  service: string
+  country: string
+  transactionType: string
+  historicalAtv: number
 }
 
 const CURRENCY_META: Record<
@@ -1150,7 +1178,40 @@ export default class extends BaseSeeder {
         networkNeedApprovalRaw: pricing.networkNeedApprovalRaw,
         internalRaw: pricing.internalRaw,
         centralBankRaw: pricing.centralBankRaw,
+        stdFixedFeeUsd: pricing.stdFixedFeeUsd,
+        stdVariableFeePct: pricing.stdVariableFeePct,
       })
+      await corridor.save()
+    }
+
+    // 10. Backfill a static USD conversion rate onto the currencies the old
+    // app's real currency_rates table actually covers (14 of them) — every
+    // other currency stays null rather than a fabricated 1:1 rate.
+    const currencyRates = readJson<RealCurrencyRate[]>('real_currency_rates.json')
+    const currencyById = Object.fromEntries(currencies.map((c) => [c.isoCode3, c]))
+    for (const rate of currencyRates) {
+      const currency = currencyById[rate.currencyCode]
+      if (!currency) continue
+      currency.merge({ feeConversionRateToUsd: rate.rateToUsd })
+      await currency.save()
+    }
+
+    // 11. Backfill historical ATV, matched by the old app's own lookup key
+    // (service + country NAME + transaction type — no payer, so several
+    // corridors can share one historical value, same as the old app).
+    const historicalAtvData = readJson<RealHistoricalAtv[]>('real_corridor_historical_atv.json')
+    const historicalAtvByKey = new Map(
+      historicalAtvData.map((row) => [
+        `${row.service}${row.country}${row.transactionType}`,
+        row.historicalAtv,
+      ])
+    )
+    const nameByCountryId = Object.fromEntries(countries.map((c) => [c.id, c.name]))
+    for (const corridor of seededCorridors) {
+      const key = `${corridor.serviceCode}${nameByCountryId[corridor.countryId]}${corridor.transactionTypeCode}`
+      const historicalAtv = historicalAtvByKey.get(key)
+      if (historicalAtv === undefined) continue
+      corridor.merge({ historicalAtv })
       await corridor.save()
     }
   }

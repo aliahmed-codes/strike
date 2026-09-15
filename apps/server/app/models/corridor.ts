@@ -53,6 +53,15 @@ export default class Corridor extends BaseModel {
   @column()
   declare centralBankRaw: string | null
 
+  @column()
+  declare stdFixedFeeUsd: number | null
+
+  @column()
+  declare stdVariableFeePct: number | null
+
+  @column()
+  declare historicalAtv: number | null
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 
