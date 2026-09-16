@@ -2,19 +2,21 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 /**
- * Pending, unsaved edits to a corridor row on the Pricing tab, staged locally
- * until the user clicks "Save Edited Corridors" — matching the old app's
- * real explicit-save model (see docs/old-app-reference/pricing-tab-corridor-editing.md
- * §1), but fixing its data-loss bug: this store is only ever cleared for a
- * row after that row's save call has actually succeeded, never before.
+ * Pending, unsaved edits to a corridor row on the Pricing tab, staged
+ * locally until the user clicks "Save Edited Corridors". Only ever cleared
+ * for a row after that row's save call has actually succeeded, never before.
  *
  * Keyed by `tabKey` (one open quote tab) then by row key (`String(rowId)`
- * for an already-saved row, `preview-${corridorId}` for one only matched by
- * the "Corridors to Offer" filters and not yet promoted to a real row) — see
- * `DisplayRow` in PricingTab.tsx. Living in its own persisted Zustand store
- * (rather than component state) is what makes edits survive switching to
- * the Summary tab and back, since Radix's `TabsContent` unmounts inactive
- * panels by default.
+ * for an already-saved row, `preview-${corridorId}:${fundingCurrencyId ?? 'none'}`
+ * for one only matched by the "Corridors to Offer" filters and not yet
+ * promoted to a real row) — see `DisplayRow` in PricingTab.tsx. Living in its
+ * own persisted Zustand store (rather than component state) is what makes
+ * edits survive switching to the Summary tab and back, since Radix's
+ * `TabsContent` unmounts inactive panels by default.
+ *
+ * `fundingCurrencyId` is deliberately not a field here — a row's funding
+ * currency is fixed by which of the quote's funding currencies it was
+ * generated for, not user-editable after the fact.
  */
 export type CorridorRowEdit = Partial<{
   atvUsd: number
@@ -24,7 +26,6 @@ export type CorridorRowEdit = Partial<{
   variableFeePct: number
   appliedFxSpread: number
   feeDiscountPct: number
-  fundingCurrencyId: number | null
 }>
 
 interface CorridorEditsState {

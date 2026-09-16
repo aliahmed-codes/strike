@@ -116,6 +116,10 @@ export function useCorridorFacets(filters: CorridorFacetFilters = {}) {
     queryKey: referenceKeys.corridorFacets(params),
     queryFn: async ({ signal }) =>
       (await apiClient.get<CorridorFacets>(`/reference/corridors/facets?${params}`, { signal })).data,
+    // Each filter combination is a new cache key with no data yet, so
+    // without this, `isLoading` flips true on every filter change and the
+    // panel blanks out until the new counts arrive.
+    placeholderData: (previousData) => previousData,
   })
 }
 
@@ -128,5 +132,6 @@ export function useMatchingCorridors(filters: CorridorFacetFilters, enabled: boo
       (await apiClient.get<{ corridors: Corridor[] }>(`/reference/corridors/matching?${params}`, { signal }))
         .data.corridors,
     enabled,
+    placeholderData: (previousData) => previousData,
   })
 }

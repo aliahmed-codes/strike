@@ -85,6 +85,10 @@ export default class QuotesController {
     await quote.load('sourceCurrencies')
     await quote.load('defaultFeeCurrency')
     await quote.load('corridors', (q) => {
+      // Stable order across refetches (e.g. after every save) — without an
+      // explicit orderBy, Postgres doesn't guarantee row order, so the
+      // Pricing tab's rows could visibly shuffle on every re-render.
+      q.orderBy('id', 'asc')
       q.preload('corridor', (cq) => cq.preload('country').preload('payoutCurrency'))
       q.preload('fundingCurrency')
       q.preload('tiers', (tq) => tq.orderBy('tierNumber'))

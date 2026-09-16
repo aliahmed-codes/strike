@@ -23,18 +23,17 @@ import {
   useUpdateQuoteCorridor,
 } from '../api/useQuoteCorridors'
 import { CollapsibleSection } from './CollapsibleSection'
-import { CorridorsToOfferSection, corridorLabel, useCorridorFilterFields } from './CorridorsToOfferSection'
+import { CorridorsToOfferSection, corridorLabel, useAppliedCorridorFilters } from './CorridorsToOfferSection'
+import { useQuoteFormField } from '../hooks/useQuoteFormField'
 import { FormField } from './FormField'
 import { SimpleSelect } from './SimpleSelect'
 import { useCorridorEditsStore, type CorridorRowEdit } from '../store/useCorridorEditsStore'
 
 const RESTRICTED_USE_CASE_LABELS = new Set(['last mile payout', 'account top-up'])
 
-// A stable reference for "no pending edits on this tab" — returning a fresh
-// `{}` literal from the Zustand selector below instead would give
-// `useSyncExternalStore` a new object every render (even though nothing
-// changed), which it reads as "the store changed", triggering a re-render,
-// which asks the selector again, forever. See Phase A in FEATURES.md.
+// A stable reference for "no pending edits" — a fresh `{}` literal from the
+// Zustand selector below would look like a store change on every render to
+// `useSyncExternalStore`, causing an infinite re-render loop.
 const NO_ROW_EDITS: Record<string, CorridorRowEdit> = {}
 
 interface EditableFields {
@@ -67,11 +66,28 @@ interface PricingSummary {
  * `quote_corridors` row, or a corridor matched by the "Corridors to Offer"
  * filters that hasn't been edited (and therefore saved) yet. Saved rows
  * always render, unconditionally, regardless of the current filters — only
- * preview rows come and go as filters change. See FEATURES.md Phase 1b.
+ * preview rows come and go as filters change.
  */
 type DisplayRow =
   | { kind: 'saved'; key: string; row: QuoteCorridor }
-  | { kind: 'preview'; key: string; corridor: Corridor }
+  | { kind: 'preview'; key: string; corridor: Corridor; fundingCurrencyId: number | null }
+
+/** One preview row per matching corridor per quote funding currency, e.g. `preview-42:7` or `preview-42:none`. */
+function previewKey(corridorId: number, fundingCurrencyId: number | null): string {
+  return `preview-${corridorId}:${fundingCurrencyId ?? 'none'}`
+}
+
+function parsePreviewKey(key: string): { corridorId: number; fundingCurrencyId: number | null } {
+  const [corridorPart, currencyPart] = key.slice('preview-'.length).split(':')
+  return {
+    corridorId: Number(corridorPart),
+    fundingCurrencyId: currencyPart === 'none' ? null : Number(currencyPart),
+  }
+}
+
+function savedPairKey(corridorId: number, fundingCurrencyId: number | null): string {
+  return `${corridorId}:${fundingCurrencyId ?? 'none'}`
+}
 
 const EMPTY_TIER: Omit<CorridorTierInput, 'tierNumber'> = {
   yearlyVolumeUsd: 0,
@@ -85,9 +101,9 @@ const money = (n: number | null) =>
   n === null ? '—' : `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
 /**
- * A static conversion rate, not a live rate feed (see FEATURES.md Phase 1b)
- * — only ~14 currencies have one. Shows "No rate available" rather than a
- * fabricated 1:1 fallback for everything else.
+ * A static conversion rate, not a live rate feed — only ~14 currencies have
+ * one. Shows "No rate available" rather than a fabricated 1:1 fallback for
+ * everything else.
  */
 function feeInFundingCurrency(
   amountUsd: number,
@@ -275,26 +291,42 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   const [tierDrafts, setTierDrafts] = useState<Record<string, CorridorTierInput[]>>({})
   const [expandedTierRows, setExpandedTierRows] = useState<Set<string>>(new Set())
   const [expandedDetailRows, setExpandedDetailRows] = useState<Set<string>>(new Set())
-  // Corridor ids currently being promoted (POSTed) from a preview row — a
-  // guard so two blur events in quick succession for the same still-unsaved
+  // Preview row keys currently being promoted (POSTed) — a guard so two
+  // rapid Save clicks (or a re-render mid-save) for the same still-unsaved
   // row don't both create a real row (the backend's 409-on-duplicate would
-  // otherwise surface as a visible error).
-  const [promotingCorridorIds, setPromotingCorridorIds] = useState<Set<number>>(new Set())
+  // otherwise surface as a visible error). Keyed by the full corridor+
+  // funding-currency preview key, not just corridor id, so promoting one
+  // currency's preview for a corridor never blocks another currency's.
+  const [promotingKeys, setPromotingKeys] = useState<Set<string>>(new Set())
   // A saved row the user explicitly removed, or a preview row they explicitly
   // dismissed — kept client-side only, for this session, so it doesn't
   // immediately reappear as a preview row while it still matches the active
   // filters (the old app needs a whole `deleted_corridors` column + restore
   // modal to manage the fallout of NOT doing this; we just don't persist it).
-  const [dismissedCorridorIds, setDismissedCorridorIds] = useState<Set<number>>(new Set())
+  // Keyed by corridor+funding-currency pair, not corridor alone.
+  const [dismissedPairKeys, setDismissedPairKeys] = useState<Set<string>>(new Set())
 
   const quote = data?.quote
-  const { filters } = useCorridorFilterFields(tabKey, quote)
+  // The Pricing tab previews against the *applied* filters, not the live
+  // checkboxes — those only take effect once "Apply Filters" is clicked on
+  // "Corridors to Offer", so toggling a checkbox there doesn't reshuffle
+  // this table until the user is ready.
+  const appliedFilters = useAppliedCorridorFilters(tabKey, quote)
   const restrictToUseCaseAllowedCountries = (quote?.useCases ?? []).some((u) =>
     RESTRICTED_USE_CASE_LABELS.has(u.label.toLowerCase())
   )
-  const filterParams = { ...filters, restrictToUseCaseAllowedCountries }
+  const filterParams = { ...appliedFilters, restrictToUseCaseAllowedCountries }
   const { data: facets } = useCorridorFacets(filterParams)
   const { data: matches, isPending: matchesLoading, isError: matchesError } = useMatchingCorridors(filterParams, true)
+  // Funding currencies are a buffered field like everything else on Summary
+  // (see useQuoteFormField) — must read the pending value here too, not just
+  // the saved quote's, or this stays out of sync until the next Save Draft.
+  const [pendingFundingCurrencyIds] = useQuoteFormField(
+    tabKey,
+    quote?.fundingCurrencies?.map((c) => c.id),
+    'fundingCurrencyIds',
+    []
+  )
 
   if (isLoading || !data) {
     return <Skeleton className="h-64" />
@@ -302,17 +334,31 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
 
   const opportunityType = data.quote.opportunityType ?? null
   const corridors = data.quote.corridors ?? []
-  const savedCorridorIds = new Set(corridors.map((c) => c.corridorId))
-  const previewCorridors = (matchesError ? [] : (matches ?? [])).filter(
-    (c) => !savedCorridorIds.has(c.id) && !dismissedCorridorIds.has(c.id)
+  const savedPairKeys = new Set(
+    corridors.map((c) => savedPairKey(c.corridorId, c.fundingCurrencyId ?? null))
   )
+  // One preview row per matching corridor per quote funding currency, or a
+  // single currency-less row if the quote has none selected yet.
+  const quoteFundingCurrencyIds =
+    pendingFundingCurrencyIds.length > 0 ? pendingFundingCurrencyIds : [null]
+  const previewRows: { corridor: Corridor; fundingCurrencyId: number | null }[] = []
+  for (const corridor of matchesError ? [] : (matches ?? [])) {
+    for (const fundingCurrencyId of quoteFundingCurrencyIds) {
+      const pairKey = savedPairKey(corridor.id, fundingCurrencyId)
+      if (savedPairKeys.has(pairKey) || dismissedPairKeys.has(pairKey)) continue
+      previewRows.push({ corridor, fundingCurrencyId })
+    }
+  }
   const displayRows: DisplayRow[] = [
     ...corridors.map((row): DisplayRow => ({ kind: 'saved', key: String(row.id), row })),
-    ...previewCorridors.map((corridor): DisplayRow => ({
-      kind: 'preview',
-      key: `preview-${corridor.id}`,
-      corridor,
-    })),
+    ...previewRows.map(
+      ({ corridor, fundingCurrencyId }): DisplayRow => ({
+        kind: 'preview',
+        key: previewKey(corridor.id, fundingCurrencyId),
+        corridor,
+        fundingCurrencyId,
+      })
+    ),
   ]
   function fieldFor(key: string, saved: EditableFields, field: keyof EditableFields): number {
     return rowEdits[key]?.[field] ?? saved[field]
@@ -322,24 +368,30 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
     setRowField(tabKey, key, field, value)
   }
 
-  function handleFundingCurrencyChange(item: DisplayRow, value: string) {
-    setRowField(tabKey, item.key, 'fundingCurrencyId', value ? Number(value) : null)
-  }
-
   /**
    * Promotes a still-preview corridor to a real saved row — seeded from the
    * catalog's own reference data plus whatever the user staged, so the new
    * row's numbers exactly match what the preview row was already showing.
-   * Only called from the explicit "Save Edited Corridors" action, never on
-   * blur — see FEATURES.md Phase A.
+   * `fundingCurrencyId` is fixed by which preview slot this was, not
+   * user-editable, so it can't come from staged edits. Only called from the
+   * explicit "Save Edited Corridors" action, never on blur.
    */
-  async function promoteRow(corridor: Corridor, key: string): Promise<void> {
-    if (promotingCorridorIds.has(corridor.id)) return
+  async function promoteRow(
+    corridor: Corridor,
+    key: string,
+    fundingCurrencyId: number | null
+  ): Promise<void> {
+    if (promotingKeys.has(key)) return
     const sentEdits = useCorridorEditsStore.getState().edits[tabKey]?.[key]
     const seed = seedQuoteCorridorFromCatalog(corridor)
-    const payload: QuoteCorridorInput = { corridorId: corridor.id, ...seed, ...sentEdits }
+    const payload: QuoteCorridorInput = {
+      corridorId: corridor.id,
+      ...seed,
+      ...sentEdits,
+      fundingCurrencyId,
+    }
 
-    setPromotingCorridorIds((prev) => new Set(prev).add(corridor.id))
+    setPromotingKeys((prev) => new Set(prev).add(key))
     try {
       const created = await addCorridor.mutateAsync(payload)
       const latest = useCorridorEditsStore.getState().edits[tabKey]?.[key]
@@ -359,9 +411,9 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
         return next
       })
     } finally {
-      setPromotingCorridorIds((prev) => {
+      setPromotingKeys((prev) => {
         const next = new Set(prev)
-        next.delete(corridor.id)
+        next.delete(key)
         return next
       })
     }
@@ -378,7 +430,7 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
 
   function labelForRowKey(key: string): string {
     if (key.startsWith('preview-')) {
-      const corridorId = Number(key.slice('preview-'.length))
+      const { corridorId } = parsePreviewKey(key)
       const corridor = (corridorCatalog ?? []).find((c) => c.id === corridorId)
       return corridor ? corridorLabel(corridor) : `Corridor #${corridorId}`
     }
@@ -386,16 +438,25 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
     return row?.corridor ? corridorLabel(row.corridor) : `Row ${key}`
   }
 
-  const dirtyRowKeys = Object.keys(rowEdits).filter((key) => Object.keys(rowEdits[key] ?? {}).length > 0)
+  // Scoped to rows that are actually currently displayed — `rowEdits` is a
+  // persisted store that can outlive the row it was staged for (e.g. an
+  // older key format from before this feature changed shape, or a preview
+  // whose corridor+currency pair has since been saved through another
+  // path). An edit for a row that no longer exists can never be saved
+  // successfully, so counting/retrying it would otherwise show a
+  // permanently-stuck "1 to save" that fails every time, no matter what's
+  // actually edited.
+  const displayRowKeys = new Set(displayRows.map((r) => r.key))
+  const dirtyRowKeys = Object.keys(rowEdits).filter(
+    (key) => displayRowKeys.has(key) && Object.keys(rowEdits[key] ?? {}).length > 0
+  )
 
   /**
    * The one explicit save action for every staged corridor edit — new-row
    * promotions and existing-row updates alike. Saves each dirty row
    * independently: a failure on one row never blocks or discards the
    * others, and a row whose save fails stays staged (still marked unsaved)
-   * so nothing the user typed is lost. Matches the old app's single "Save
-   * Edited Corridors" button, minus its data-loss-on-failure bug (see
-   * docs/old-app-reference/pricing-tab-corridor-editing.md §1).
+   * so nothing the user typed is lost.
    */
   async function handleSaveEditedCorridors() {
     setIsSavingCorridors(true)
@@ -405,10 +466,10 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
     for (const key of dirtyRowKeys) {
       try {
         if (key.startsWith('preview-')) {
-          const corridorId = Number(key.slice('preview-'.length))
+          const { corridorId, fundingCurrencyId } = parsePreviewKey(key)
           const corridor = (corridorCatalog ?? []).find((c) => c.id === corridorId)
           if (!corridor) continue
-          await promoteRow(corridor, key)
+          await promoteRow(corridor, key, fundingCurrencyId)
         } else {
           await saveRow(Number(key), key)
         }
@@ -427,15 +488,16 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
 
   function handleRemoveOrDismiss(item: DisplayRow) {
     if (item.kind === 'saved') {
-      const corridorId = item.row.corridorId
+      const pairKey = savedPairKey(item.row.corridorId, item.row.fundingCurrencyId ?? null)
       removeCorridor.mutate(item.row.id, {
         onSuccess: () => {
-          setDismissedCorridorIds((prev) => new Set(prev).add(corridorId))
+          setDismissedPairKeys((prev) => new Set(prev).add(pairKey))
           clearRowEdit(tabKey, item.key)
         },
       })
     } else {
-      setDismissedCorridorIds((prev) => new Set(prev).add(item.corridor.id))
+      const pairKey = savedPairKey(item.corridor.id, item.fundingCurrencyId)
+      setDismissedPairKeys((prev) => new Set(prev).add(pairKey))
       clearRowEdit(tabKey, item.key)
     }
   }
@@ -595,7 +657,7 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                   const corridor = item.kind === 'saved' ? item.row.corridor : item.corridor
                   const savedRow = item.kind === 'saved' ? item.row : null
                   const isPreview = item.kind === 'preview'
-                  const isPromoting = item.kind === 'preview' && promotingCorridorIds.has(item.corridor.id)
+                  const isPromoting = item.kind === 'preview' && promotingKeys.has(item.key)
                   const saved: EditableFields =
                     item.kind === 'saved'
                       ? {
@@ -619,15 +681,12 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                   }
                   const isTiered = savedRow?.pricingModel === 'tiered'
                   const currentTiers = savedRow ? tiersFor(savedRow) : []
-                  // A pending funding-currency edit (staged, not yet saved) takes
-                  // priority over the saved value for both row kinds — checked with
-                  // `in` (not `??`) so explicitly clearing the dropdown to "—"
-                  // (a staged `null`) isn't mistaken for "no pending edit". See Phase A.
-                  const pendingEdit = rowEdits[item.key]
+                  // Fixed per row — a saved row's own funding currency, or
+                  // the currency this preview slot was generated for. Never
+                  // user-editable after the row exists.
                   const fundingCurrencyId =
-                    pendingEdit && 'fundingCurrencyId' in pendingEdit
-                      ? pendingEdit.fundingCurrencyId!
-                      : (savedRow?.fundingCurrencyId ?? null)
+                    item.kind === 'preview' ? item.fundingCurrencyId : (savedRow?.fundingCurrencyId ?? null)
+                  const pendingEdit = rowEdits[item.key]
                   const isDirty = Object.keys(pendingEdit ?? {}).length > 0
                   const previewSummary: PricingSummary | null = !corridor
                     ? null
@@ -742,18 +801,9 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             </div>
                           )}
                         </td>
-                        <td className="py-2 pr-3">
-                          <div className="w-24">
-                            <SimpleSelect
-                              value={fundingCurrencyId ? String(fundingCurrencyId) : ''}
-                              onValueChange={(v) => handleFundingCurrencyChange(item, v)}
-                              options={(currencies ?? []).map((c) => ({
-                                value: String(c.id),
-                                label: c.isoCode3,
-                              }))}
-                              placeholder="—"
-                            />
-                          </div>
+                        <td className="py-2 pr-3 text-muted-foreground">
+                          {/* Not editable — remove the row and let it reappear as a preview under the intended currency instead. */}
+                          {fundingCurrencyObj?.isoCode3 ?? '—'}
                         </td>
                         <td className="py-2 pr-3 text-muted-foreground">
                           {data.quote.sourceCurrency?.isoCode3 ?? '—'}

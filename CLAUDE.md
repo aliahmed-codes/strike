@@ -88,7 +88,7 @@ We use AdonisJS's built-in **access_tokens** auth guard: a user logs in with ema
 ## 7. Coding conventions
 
 - **No dead code, no commented-out code, no "just in case" abstractions.** If it's not used, delete it.
-- **No random/ad-hoc comments.** Comments explain *why*, not *what* — only add one when the reasoning genuinely isn't obvious from the code.
+- **No random/ad-hoc comments.** Comments explain *why*, not *what* — only add one when the reasoning genuinely isn't obvious from the code. Keep it to one short line; never a paragraph. **Never reference the current phase, session, or task by name** (no "Phase A", "Phase B", "per the user's request", "found while testing X") — that's changelog content, not code documentation, and it rots the moment the phase name means nothing to a future reader. If the code needs that much explanation, the explanation belongs in FEATURES.md, not inline.
 - **One implementation per feature.** The old project had two parallel, half-finished implementations of quoting; that must never happen here. If you're rebuilding something, delete the old attempt in the same change.
 - **Naming is consistent and spelled correctly.** No near-duplicate fields like the old project's `standard_fixed_fee_usd` vs `std_fixed_fee_usd`, no typos like `fiex_fee_usd`.
 - **All UI is built from the shared component library** (`src/components/ui`) and the Tailwind theme tokens defined in `src/index.css` — no inline one-off styling that bypasses the theme.

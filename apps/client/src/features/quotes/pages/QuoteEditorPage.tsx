@@ -18,6 +18,8 @@ export function QuoteEditorPage() {
   const isDirty = useQuoteWorkspaceStore((state) => (tabKey ? state.isDirty(tabKey) : false))
   const pendingFields = useQuoteWorkspaceStore((state) => (tabKey ? state.pendingFields[tabKey] : undefined))
   const markSaved = useQuoteWorkspaceStore((state) => state.markSaved)
+  const activeSubTab = useQuoteWorkspaceStore((state) => (tabKey ? state.activeSubTab[tabKey] : undefined))
+  const setActiveSubTab = useQuoteWorkspaceStore((state) => state.setActiveSubTab)
 
   const { data, isLoading } = useQuote(tab?.quoteId ?? null)
   const createQuote = useCreateQuote()
@@ -78,7 +80,10 @@ export function QuoteEditorPage() {
         </div>
       )}
 
-      <Tabs defaultValue="summary">
+      <Tabs
+        value={activeSubTab ?? 'summary'}
+        onValueChange={(value) => setActiveSubTab(tabKey, value)}
+      >
         <TabsList>
           <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="setup-fee">Setup Fee</TabsTrigger>

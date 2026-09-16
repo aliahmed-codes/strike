@@ -1,10 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import type { Corridor, CorridorFacetOption, Quote } from '@strike/shared'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useCorridorFacets, type CorridorFacetFilters } from '../api/useReferenceData'
 import { useQuoteFormField } from '../hooks/useQuoteFormField'
+import { useQuoteWorkspaceStore } from '../store/useQuoteWorkspaceStore'
 import { CollapsibleSection } from './CollapsibleSection'
 
 const EMPTY_NUMBER_ARRAY: number[] = []
@@ -82,6 +84,30 @@ export function useCorridorFilterFields(tabKey: string, quote: Quote | undefined
     setPayerCodes,
     setHideUsdSwift,
   }
+}
+
+/** The filter set as last saved on the quote — the fallback "applied" state until the user clicks "Apply Filters" for the first time this session. */
+export function savedCorridorFilters(quote: Quote | undefined): CorridorFacetFilters {
+  return {
+    regionIds: quote?.corridorFilterRegionIds ?? [],
+    countryIds: quote?.corridorFilterCountryIds ?? [],
+    serviceCodes: quote?.corridorFilterServiceCodes ?? [],
+    transactionTypeCodes: quote?.corridorFilterTransactionTypeCodes ?? [],
+    payoutCurrencyIds: quote?.corridorFilterPayoutCurrencyIds ?? [],
+    payerCodes: quote?.corridorFilterPayerCodes ?? [],
+    hideUsdSwift: quote?.corridorFilterHideUsdSwift ?? false,
+  }
+}
+
+/**
+ * The filters actually driving the Pricing tab's preview rows — separate
+ * from the live checkboxes above, which only change the *selection*. Only
+ * moves when "Apply Filters" is clicked; falls back to the quote's saved
+ * filters until then.
+ */
+export function useAppliedCorridorFilters(tabKey: string, quote: Quote | undefined): CorridorFacetFilters {
+  const override = useQuoteWorkspaceStore((s) => s.appliedCorridorFilters[tabKey])
+  return override ?? savedCorridorFilters(quote)
 }
 
 export function corridorLabel(c: Corridor): string {
@@ -221,23 +247,32 @@ export function CorridorsToOfferSection({
     setHideUsdSwift,
   } = useCorridorFilterFields(tabKey, quote)
   const filterParams = { ...filters, restrictToUseCaseAllowedCountries }
-  const { data: facets, isLoading, isError } = useCorridorFacets(filterParams)
+  const { data: facets, isLoading, isFetching, isError } = useCorridorFacets(filterParams)
+  const appliedFilters = useAppliedCorridorFilters(tabKey, quote)
+  const applyCorridorFilters = useQuoteWorkspaceStore((s) => s.applyCorridorFilters)
+  const hasUnappliedChanges = JSON.stringify(filters) !== JSON.stringify(appliedFilters)
 
   return (
     <CollapsibleSection
       title="Corridors to Offer"
       defaultOpen={defaultOpen}
       actions={
-        !isLoading && facets ? (
-          <span className="text-xs text-primary-foreground/80">
-            {facets.totalMatched} of {facets.totalAvailable} corridors match
-          </span>
-        ) : undefined
+        <div className="flex items-center gap-3">
+          {!isLoading && facets && (
+            <span className="text-xs text-primary-foreground/80">
+              {facets.totalMatched} of {facets.totalAvailable} corridors match
+              {isFetching ? ' — updating…' : ''}
+            </span>
+          )}
+          <Button size="sm" onClick={() => applyCorridorFilters(tabKey, filters)} disabled={!hasUnappliedChanges}>
+            Apply Filters
+          </Button>
+        </div>
       }
     >
       <p className="mb-3 text-xs text-muted-foreground">
-        Filter the real corridor catalog — matching corridors show up automatically as preview
-        rows on the Pricing tab. Edit a preview row there to save it.
+        Filter the real corridor catalog, then click "Apply Filters" to preview the matching
+        corridors as rows on the Pricing tab. Edit a preview row there to save it.
       </p>
       {isError ? (
         <p role="alert" className="text-sm text-destructive">Could not load corridor counts. Please try again.</p>
