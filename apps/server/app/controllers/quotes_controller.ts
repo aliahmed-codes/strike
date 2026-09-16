@@ -89,7 +89,9 @@ export default class QuotesController {
       // explicit orderBy, Postgres doesn't guarantee row order, so the
       // Pricing tab's rows could visibly shuffle on every re-render.
       q.orderBy('id', 'asc')
-      q.preload('corridor', (cq) => cq.preload('country').preload('payoutCurrency'))
+      q.preload('corridor', (cq) =>
+        cq.preload('country', (ctq) => ctq.preload('region')).preload('payoutCurrency')
+      )
       q.preload('fundingCurrency')
       q.preload('tiers', (tq) => tq.orderBy('tierNumber'))
     })

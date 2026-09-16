@@ -1,5 +1,5 @@
-import { Fragment, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { Fragment, useState, type ReactNode } from 'react'
+import { AlertTriangle, Filter } from 'lucide-react'
 import {
   computeCorridorPricing,
   computeQuoteTotals,
@@ -14,6 +14,7 @@ import {
   type QuoteCorridorInput,
 } from '@strike/shared'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
@@ -52,6 +53,7 @@ interface EditableFields {
 interface PricingSummary {
   totalRevenue: number
   totalMargin: number
+  fxMargin: number
   fxMarginPct: number
   marginFee: number
   marginFeePct: number
@@ -91,6 +93,200 @@ function parsePreviewKey(key: string): { corridorId: number; fundingCurrencyId: 
 
 function savedPairKey(corridorId: number, fundingCurrencyId: number | null): string {
   return `${corridorId}:${fundingCurrencyId ?? 'none'}`
+}
+
+/**
+ * One computed view per displayed row (saved or preview) — the single place
+ * that resolves "what does this row currently show," reused for rendering,
+ * for the Pricing tab's own column filter/sort, and for the Summary totals.
+ * A row's effective totalRevenue/marginPct/etc. is its live preview value
+ * when dirty/unsaved, or its saved value otherwise — the same fallback the
+ * table cells already display.
+ */
+interface RowView {
+  item: DisplayRow
+  corridor: Corridor | undefined
+  savedRow: QuoteCorridor | null
+  isPreview: boolean
+  current: EditableFields
+  isTiered: boolean
+  currentTiers: CorridorTierInput[]
+  fundingCurrencyId: number | null
+  fundingCurrencyObj: { isoCode3: string; feeConversionRateToUsd: number | null } | undefined
+  isDirty: boolean
+  previewSummary: PricingSummary | null
+  totalRevenue: number | null
+  totalMargin: number | null
+  fxMargin: number | null
+  fxMarginPct: number | null
+  marginFee: number | null
+  marginFeePct: number | null
+  marginPct: number | null
+  grossMarginPct: number | null
+  takeRatePct: number | null
+  needsApproval: boolean
+  needsFinancialApproval: boolean
+  needsNetworkApproval: boolean
+}
+
+type SortField = 'corridor' | 'fundingCurrency' | 'volume' | 'revenue' | 'marginPct' | 'takeRate' | 'approval'
+type SortDirection = 'asc' | 'desc'
+interface SortState {
+  field: SortField
+  direction: SortDirection
+}
+
+/** Click cycles asc -> desc -> unsorted, matching the old app's real sort-header behavior. */
+function cycleSort(previous: SortState | null, field: SortField): SortState | null {
+  if (!previous || previous.field !== field) return { field, direction: 'asc' }
+  if (previous.direction === 'asc') return { field, direction: 'desc' }
+  return null
+}
+
+function sortValue(row: RowView, field: SortField): string | number {
+  switch (field) {
+    case 'corridor':
+      return row.corridor ? corridorLabel(row.corridor) : ''
+    case 'fundingCurrency':
+      return row.fundingCurrencyObj?.isoCode3 ?? ''
+    case 'volume':
+      return row.current.yearlyVolumeUsd
+    case 'revenue':
+      return row.totalRevenue ?? -Infinity
+    case 'marginPct':
+      return row.marginPct ?? -Infinity
+    case 'takeRate':
+      return row.takeRatePct ?? -Infinity
+    case 'approval':
+      return row.needsApproval ? 1 : 0
+  }
+}
+
+function sortRows(rows: RowView[], sort: SortState | null): RowView[] {
+  if (!sort) return rows
+  const sorted = [...rows].sort((a, b) => {
+    const av = sortValue(a, sort.field)
+    const bv = sortValue(b, sort.field)
+    return typeof av === 'string' && typeof bv === 'string' ? av.localeCompare(bv) : (av as number) - (bv as number)
+  })
+  return sort.direction === 'desc' ? sorted.reverse() : sorted
+}
+
+type ApprovalFilterValue = 'yes' | 'no'
+
+/**
+ * Matches the old app's real "Filter Corridors" modal dimension-for-
+ * dimension, but as one flat model applied through a single function below
+ * instead of the old app's duplicated filter-application code and six
+ * separate hardcoded "negative value" booleans scattered across two places.
+ */
+interface TableFilters {
+  regionIds: number[]
+  countryIds: number[]
+  transactionTypeCodes: string[]
+  serviceCodes: string[]
+  payoutCurrencyIds: number[]
+  fxSources: string[]
+  fundingCurrencyIds: number[]
+  /** Empty = no filter on this dimension; otherwise only rows whose value is in this set. */
+  financialApproval: ApprovalFilterValue[]
+  networkApproval: ApprovalFilterValue[]
+  showOnlyUsdSwift: boolean
+  hideUsdSwift: boolean
+  showOnlyZeroVolume: boolean
+  showOnlyNonZeroVolume: boolean
+  negativeMarginFee: boolean
+  negativeMarginFeePercent: boolean
+  negativeFxMargin: boolean
+  negativeFxMarginPercent: boolean
+  negativeMarginPercent: boolean
+  negativeGrossMarginPercent: boolean
+}
+
+const DEFAULT_TABLE_FILTERS: TableFilters = {
+  regionIds: [],
+  countryIds: [],
+  transactionTypeCodes: [],
+  serviceCodes: [],
+  payoutCurrencyIds: [],
+  fxSources: [],
+  fundingCurrencyIds: [],
+  financialApproval: [],
+  networkApproval: [],
+  showOnlyUsdSwift: false,
+  hideUsdSwift: false,
+  showOnlyZeroVolume: false,
+  showOnlyNonZeroVolume: false,
+  negativeMarginFee: false,
+  negativeMarginFeePercent: false,
+  negativeFxMargin: false,
+  negativeFxMarginPercent: false,
+  negativeMarginPercent: false,
+  negativeGrossMarginPercent: false,
+}
+
+function isTableFiltersActive(filters: TableFilters): boolean {
+  return JSON.stringify(filters) !== JSON.stringify(DEFAULT_TABLE_FILTERS)
+}
+
+/** Same rule the backend's "Hide USD SWIFT" facet filter uses (corridor_facet_service.ts), so the two never disagree. */
+function isUsdSwiftCorridor(corridor: Corridor): boolean {
+  return corridor.payerCode.toLowerCase().includes('swift wire transfer')
+}
+
+function matchesTableFilters(row: RowView, filters: TableFilters): boolean {
+  const corridor = row.corridor
+  if (filters.regionIds.length > 0) {
+    const regionId = corridor?.country?.region?.id
+    if (regionId === undefined || !filters.regionIds.includes(regionId)) return false
+  }
+  if (filters.countryIds.length > 0 && !filters.countryIds.includes(corridor?.countryId ?? -1)) return false
+  if (
+    filters.transactionTypeCodes.length > 0 &&
+    !filters.transactionTypeCodes.includes(corridor?.transactionTypeCode ?? '')
+  )
+    return false
+  if (filters.serviceCodes.length > 0 && !filters.serviceCodes.includes(corridor?.serviceCode ?? '')) return false
+  if (
+    filters.payoutCurrencyIds.length > 0 &&
+    !filters.payoutCurrencyIds.includes(corridor?.payoutCurrencyId ?? -1)
+  )
+    return false
+  if (filters.fxSources.length > 0 && !filters.fxSources.includes(corridor?.fxSource ?? '')) return false
+  if (
+    filters.fundingCurrencyIds.length > 0 &&
+    (row.fundingCurrencyId === null || !filters.fundingCurrencyIds.includes(row.fundingCurrencyId))
+  )
+    return false
+  if (filters.financialApproval.length > 0) {
+    const value: ApprovalFilterValue = row.needsFinancialApproval ? 'yes' : 'no'
+    if (!filters.financialApproval.includes(value)) return false
+  }
+  if (filters.networkApproval.length > 0) {
+    const value: ApprovalFilterValue = row.needsNetworkApproval ? 'yes' : 'no'
+    if (!filters.networkApproval.includes(value)) return false
+  }
+  if (filters.showOnlyUsdSwift && !(corridor && isUsdSwiftCorridor(corridor))) return false
+  if (filters.hideUsdSwift && corridor && isUsdSwiftCorridor(corridor)) return false
+  if (filters.showOnlyZeroVolume && row.current.yearlyVolumeUsd !== 0) return false
+  if (filters.showOnlyNonZeroVolume && row.current.yearlyVolumeUsd <= 0) return false
+  // "Show corridors with negative values" — any checked box is a reason to
+  // include the row (OR across the group), matching the group's own label:
+  // each checkbox names an additional condition to surface, not a stricter
+  // requirement to satisfy all of them at once.
+  const negativeChecks: [boolean, number | null][] = [
+    [filters.negativeMarginFee, row.marginFee],
+    [filters.negativeMarginFeePercent, row.marginFeePct],
+    [filters.negativeFxMargin, row.fxMargin],
+    [filters.negativeFxMarginPercent, row.fxMarginPct],
+    [filters.negativeMarginPercent, row.marginPct],
+    [filters.negativeGrossMarginPercent, row.grossMarginPct],
+  ]
+  const activeNegativeChecks = negativeChecks.filter(([enabled]) => enabled)
+  if (activeNegativeChecks.length > 0 && !activeNegativeChecks.some(([, value]) => value !== null && value < 0)) {
+    return false
+  }
+  return true
 }
 
 const EMPTY_TIER: Omit<CorridorTierInput, 'tierNumber'> = {
@@ -246,6 +442,76 @@ function ApprovalCell({
   )
 }
 
+function SortableHeader({
+  label,
+  field,
+  sortState,
+  onSort,
+  align = 'left',
+}: {
+  label: string
+  field: SortField
+  sortState: SortState | null
+  onSort: (field: SortField) => void
+  align?: 'left' | 'right'
+}) {
+  const isActive = sortState?.field === field
+  return (
+    <th
+      className={`pb-2 pr-3 cursor-pointer font-medium select-none hover:text-foreground ${align === 'right' ? 'text-right' : 'text-left'}`}
+      onClick={() => onSort(field)}
+    >
+      {label}
+      {isActive && (sortState!.direction === 'asc' ? ' ▲' : ' ▼')}
+    </th>
+  )
+}
+
+/** A small multi-select checklist — used for every "Filter Corridors" dimension so there's one consistent look, not a bespoke control per field. */
+function CheckboxGroup<T extends string | number>({
+  title,
+  options,
+  selected,
+  onToggle,
+  extraHeader,
+}: {
+  title: string
+  options: { value: T; label: string }[]
+  selected: T[]
+  onToggle: (value: T) => void
+  extraHeader?: ReactNode
+}) {
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-sm font-semibold">{title}</p>
+        {extraHeader}
+      </div>
+      {options.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No values</p>
+      ) : (
+        <div className="space-y-1.5">
+          {options.map((option) => (
+            <label key={String(option.value)} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={selected.includes(option.value)}
+                onChange={() => onToggle(option.value)}
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Toggles a value in/out of a selection array — the shared behavior every checkbox group's onToggle uses. */
+function toggleInArray<T>(array: T[], value: T): T[] {
+  return array.includes(value) ? array.filter((v) => v !== value) : [...array, value]
+}
+
 export function PricingTab({
   tabKey,
   quoteId,
@@ -309,6 +575,13 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   // modal to manage the fallout of NOT doing this; we just don't persist it).
   // Keyed by corridor+funding-currency pair, not corridor alone.
   const [dismissedPairKeys, setDismissedPairKeys] = useState<Set<string>>(new Set())
+  // The Pricing tab's own column sort/filter — a view-only preference over
+  // whatever's currently displayed, separate from "Corridors to Offer"
+  // (which decides *which corridors match*, not how the resulting table is
+  // sorted/filtered) and not persisted, since it's not quote data.
+  const [sortState, setSortState] = useState<SortState | null>(null)
+  const [tableFilters, setTableFilters] = useState<TableFilters>(DEFAULT_TABLE_FILTERS)
+  const [showFilterModal, setShowFilterModal] = useState(false)
 
   const quote = data?.quote
   // The Pricing tab previews against the *applied* filters, not the live
@@ -364,22 +637,22 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
       })
     ),
   ]
-  // One row-shape adaptation per displayed row (saved or still-preview),
-  // then the actual summing math is fully delegated to the shared
-  // computeQuoteTotals — the same function the backend uses for a quote's
-  // saved-only totals — so this can never drift into its own duplicate
-  // arithmetic.
-  const pricedCorridors: PricedCorridor[] = displayRows.map((item): PricedCorridor => {
-    if (item.kind === 'saved') {
-      return {
-        totalRevenue: item.row.totalRevenue,
-        totalMargin: item.row.totalMargin,
-        yearlyVolumeUsd: item.row.yearlyVolumeUsd,
-        yearlyTransactions: item.row.yearlyTransactions,
-        needsApproval: item.row.needsApproval,
-      }
-    }
-    const saved = previewFieldsFor(item.corridor)
+  function buildRowView(item: DisplayRow): RowView {
+    const corridor = item.kind === 'saved' ? item.row.corridor : item.corridor
+    const savedRow = item.kind === 'saved' ? item.row : null
+    const isPreview = item.kind === 'preview'
+    const saved: EditableFields =
+      item.kind === 'saved'
+        ? {
+            atvUsd: item.row.atvUsd ?? 0,
+            yearlyVolumeUsd: item.row.yearlyVolumeUsd,
+            yearlyTransactions: item.row.yearlyTransactions,
+            fixedFeeUsd: item.row.fixedFeeUsd,
+            variableFeePct: item.row.variableFeePct,
+            appliedFxSpread: item.row.appliedFxSpread,
+            feeDiscountPct: item.row.feeDiscountPct ?? 0,
+          }
+        : previewFieldsFor(item.corridor)
     const current: EditableFields = {
       atvUsd: fieldFor(item.key, saved, 'atvUsd'),
       yearlyVolumeUsd: fieldFor(item.key, saved, 'yearlyVolumeUsd'),
@@ -389,16 +662,51 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
       appliedFxSpread: fieldFor(item.key, saved, 'appliedFxSpread'),
       feeDiscountPct: fieldFor(item.key, saved, 'feeDiscountPct'),
     }
-    const summary = previewPricing(current, item.corridor, item.fundingCurrencyId, opportunityType)
+    const isTiered = savedRow?.pricingModel === 'tiered'
+    const currentTiers = savedRow ? tiersFor(savedRow) : []
+    const fundingCurrencyId =
+      item.kind === 'preview' ? item.fundingCurrencyId : (savedRow?.fundingCurrencyId ?? null)
+    const pendingEdit = rowEdits[item.key]
+    const isDirty = Object.keys(pendingEdit ?? {}).length > 0
+    const previewSummary: PricingSummary | null = !corridor
+      ? null
+      : isTiered
+        ? previewTieredPricing(current, current.atvUsd, currentTiers, corridor, fundingCurrencyId, opportunityType)
+        : previewPricing(current, corridor, fundingCurrencyId, opportunityType)
+    const fundingCurrencyObj = savedRow
+      ? savedRow.fundingCurrency
+      : (currencies ?? []).find((c) => c.id === fundingCurrencyId)
+
     return {
-      totalRevenue: summary.totalRevenue,
-      totalMargin: summary.totalMargin,
-      yearlyVolumeUsd: current.yearlyVolumeUsd,
-      yearlyTransactions: current.yearlyTransactions,
-      needsApproval: summary.needsApproval,
+      item,
+      corridor,
+      savedRow,
+      isPreview,
+      current,
+      isTiered,
+      currentTiers,
+      fundingCurrencyId,
+      fundingCurrencyObj,
+      isDirty,
+      previewSummary,
+      totalRevenue: previewSummary ? previewSummary.totalRevenue : (savedRow?.totalRevenue ?? null),
+      totalMargin: previewSummary ? previewSummary.totalMargin : (savedRow?.totalMargin ?? null),
+      fxMargin: previewSummary ? previewSummary.fxMargin : (savedRow?.fxMargin ?? null),
+      fxMarginPct: previewSummary ? previewSummary.fxMarginPct : (savedRow?.fxMarginPct ?? null),
+      marginFee: previewSummary ? previewSummary.marginFee : (savedRow?.marginFee ?? null),
+      marginFeePct: previewSummary ? previewSummary.marginFeePct : (savedRow?.marginFeePct ?? null),
+      marginPct: previewSummary ? previewSummary.marginPct : (savedRow?.marginPct ?? null),
+      grossMarginPct: previewSummary ? previewSummary.grossMarginPct : (savedRow?.grossMarginPct ?? null),
+      takeRatePct: previewSummary ? previewSummary.takeRatePct : (savedRow?.takeRatePct ?? null),
+      needsApproval: previewSummary ? previewSummary.needsApproval : (savedRow?.needsApproval ?? false),
+      needsFinancialApproval: previewSummary
+        ? previewSummary.needsFinancialApproval
+        : (savedRow?.needsFinancialApproval ?? false),
+      needsNetworkApproval: previewSummary
+        ? previewSummary.needsNetworkApproval
+        : (savedRow?.needsNetworkApproval ?? false),
     }
-  })
-  const quoteTotals = computeQuoteTotals(pricedCorridors)
+  }
 
   function fieldFor(key: string, saved: EditableFields, field: keyof EditableFields): number {
     return rowEdits[key]?.[field] ?? saved[field]
@@ -611,6 +919,47 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
 
   const previewRowCount = displayRows.filter((r) => r.kind === 'preview').length
 
+  // One pass building a computed view per row, then the table's own
+  // filter/sort is applied on top — the Summary totals below are computed
+  // from the *filtered* set (not sorting, which doesn't affect a sum),
+  // matching the old app's real behavior of totalling exactly what the
+  // table currently shows (docs/old-app-reference §3-4).
+  const rowViews = displayRows.map(buildRowView)
+  const filteredRowViews = rowViews.filter((r) => matchesTableFilters(r, tableFilters))
+  const visibleRowViews = sortRows(filteredRowViews, sortState)
+  const pricedCorridors: PricedCorridor[] = filteredRowViews.map((r) => ({
+    totalRevenue: r.totalRevenue,
+    totalMargin: r.totalMargin,
+    yearlyVolumeUsd: r.current.yearlyVolumeUsd,
+    yearlyTransactions: r.current.yearlyTransactions,
+    needsApproval: r.needsApproval,
+  }))
+  const quoteTotals = computeQuoteTotals(pricedCorridors)
+
+  // Every "Filter Corridors" option list is derived from what's currently
+  // displayed (unfiltered by this same filter — options don't narrow
+  // themselves away), matching the old app's real modal: it only ever
+  // offers values that actually exist among the corridors already shown,
+  // not the full global catalog.
+  const uniqueById = <T extends { id: number }>(items: (T | null | undefined)[]): T[] =>
+    Array.from(new Map(items.filter((v): v is T => !!v).map((item) => [item.id, item])).values())
+  const uniqueStrings = (values: (string | null | undefined)[]): string[] =>
+    Array.from(new Set(values.filter((v): v is string => !!v)))
+
+  const regionOptions = uniqueById(rowViews.map((r) => r.corridor?.country?.region))
+  const countryOptions = uniqueById(rowViews.map((r) => r.corridor?.country))
+  const transactionTypeOptions = uniqueStrings(rowViews.map((r) => r.corridor?.transactionTypeCode))
+  const serviceOptions = uniqueStrings(rowViews.map((r) => r.corridor?.serviceCode))
+  const payoutCurrencyOptions = uniqueById(rowViews.map((r) => r.corridor?.payoutCurrency))
+  const fxSourceOptions = uniqueStrings(rowViews.map((r) => r.corridor?.fxSource))
+  const fundingCurrencyOptions = uniqueById(
+    rowViews.map((r) =>
+      r.fundingCurrencyId !== null && r.fundingCurrencyObj
+        ? { id: r.fundingCurrencyId, isoCode3: r.fundingCurrencyObj.isoCode3 }
+        : null
+    )
+  )
+
   return (
     <div className="space-y-6">
       <CorridorsToOfferSection
@@ -655,6 +1004,177 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
             <PreviewStat label="Average Take Rate" value={pct(quoteTotals.averageTakeRatePct)} />
           </div>
         )}
+        {displayRows.length > 0 && (
+          <div className="mb-3 flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowFilterModal(true)}>
+              <Filter className="mr-1.5 size-3.5" />
+              Filter Corridors
+              {isTableFiltersActive(tableFilters) && (
+                <span className="ml-1.5 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
+                  {visibleRowViews.length}/{displayRows.length}
+                </span>
+              )}
+            </Button>
+            {isTableFiltersActive(tableFilters) && (
+              <Button variant="ghost" size="sm" onClick={() => setTableFilters(DEFAULT_TABLE_FILTERS)}>
+                Clear filters
+              </Button>
+            )}
+          </div>
+        )}
+        <Dialog open={showFilterModal} onOpenChange={setShowFilterModal}>
+          <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Filter Corridors</DialogTitle>
+              <DialogDescription>
+                Choose one or more values per field. Filters apply instantly as you toggle each checkbox.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <CheckboxGroup
+                title="Region"
+                options={regionOptions.map((r) => ({ value: r.id, label: r.name }))}
+                selected={tableFilters.regionIds}
+                onToggle={(id) => setTableFilters((prev) => ({ ...prev, regionIds: toggleInArray(prev.regionIds, id) }))}
+              />
+              <CheckboxGroup
+                title="Country"
+                options={countryOptions.map((c) => ({ value: c.id, label: c.name }))}
+                selected={tableFilters.countryIds}
+                onToggle={(id) => setTableFilters((prev) => ({ ...prev, countryIds: toggleInArray(prev.countryIds, id) }))}
+              />
+              <CheckboxGroup
+                title="Transaction Type"
+                options={transactionTypeOptions.map((v) => ({ value: v, label: v }))}
+                selected={tableFilters.transactionTypeCodes}
+                onToggle={(v) =>
+                  setTableFilters((prev) => ({ ...prev, transactionTypeCodes: toggleInArray(prev.transactionTypeCodes, v) }))
+                }
+              />
+              <CheckboxGroup
+                title="Service"
+                options={serviceOptions.map((v) => ({ value: v, label: v }))}
+                selected={tableFilters.serviceCodes}
+                onToggle={(v) => setTableFilters((prev) => ({ ...prev, serviceCodes: toggleInArray(prev.serviceCodes, v) }))}
+              />
+              <CheckboxGroup
+                title="Payout Currency"
+                options={payoutCurrencyOptions.map((c) => ({ value: c.id, label: c.isoCode3 }))}
+                selected={tableFilters.payoutCurrencyIds}
+                onToggle={(id) =>
+                  setTableFilters((prev) => ({ ...prev, payoutCurrencyIds: toggleInArray(prev.payoutCurrencyIds, id) }))
+                }
+              />
+              <CheckboxGroup
+                title="FX Source"
+                options={fxSourceOptions.map((v) => ({ value: v, label: v }))}
+                selected={tableFilters.fxSources}
+                onToggle={(v) => setTableFilters((prev) => ({ ...prev, fxSources: toggleInArray(prev.fxSources, v) }))}
+              />
+              <CheckboxGroup
+                title="Funding Currency"
+                options={fundingCurrencyOptions.map((c) => ({ value: c.id, label: c.isoCode3 }))}
+                selected={tableFilters.fundingCurrencyIds}
+                onToggle={(id) =>
+                  setTableFilters((prev) => ({ ...prev, fundingCurrencyIds: toggleInArray(prev.fundingCurrencyIds, id) }))
+                }
+              />
+              <CheckboxGroup
+                title="Financial Approval"
+                options={[
+                  { value: 'yes' as ApprovalFilterValue, label: 'Yes' },
+                  { value: 'no' as ApprovalFilterValue, label: 'No' },
+                ]}
+                selected={tableFilters.financialApproval}
+                onToggle={(v) =>
+                  setTableFilters((prev) => ({ ...prev, financialApproval: toggleInArray(prev.financialApproval, v) }))
+                }
+              />
+              <CheckboxGroup
+                title="Network Approval"
+                options={[
+                  { value: 'yes' as ApprovalFilterValue, label: 'Yes' },
+                  { value: 'no' as ApprovalFilterValue, label: 'No' },
+                ]}
+                selected={tableFilters.networkApproval}
+                onToggle={(v) =>
+                  setTableFilters((prev) => ({ ...prev, networkApproval: toggleInArray(prev.networkApproval, v) }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={tableFilters.showOnlyUsdSwift}
+                  onChange={(e) => setTableFilters((prev) => ({ ...prev, showOnlyUsdSwift: e.target.checked }))}
+                />
+                Show only corridors with USD SWIFT Wire Transfer
+              </label>
+              <label className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={tableFilters.hideUsdSwift}
+                  onChange={(e) => setTableFilters((prev) => ({ ...prev, hideUsdSwift: e.target.checked }))}
+                />
+                Hide only corridors with USD SWIFT Wire Transfer
+              </label>
+              <label className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={tableFilters.showOnlyZeroVolume}
+                  onChange={(e) => setTableFilters((prev) => ({ ...prev, showOnlyZeroVolume: e.target.checked }))}
+                />
+                Show only corridors with 0 Yearly Principal Volume
+              </label>
+              <label className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={tableFilters.showOnlyNonZeroVolume}
+                  onChange={(e) => setTableFilters((prev) => ({ ...prev, showOnlyNonZeroVolume: e.target.checked }))}
+                />
+                Show only corridors with &gt; 0 Yearly Principal Volume
+              </label>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="mb-2 text-sm font-semibold">Show Corridors with Negative Values</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {(
+                  [
+                    ['negativeMarginFee', 'Margin Fee'],
+                    ['negativeMarginFeePercent', 'Margin Fee %'],
+                    ['negativeFxMargin', 'FX Margin'],
+                    ['negativeFxMarginPercent', 'FX Margin %'],
+                    ['negativeMarginPercent', 'Margin %'],
+                    ['negativeGrossMarginPercent', 'Gross Margin %'],
+                  ] as [keyof TableFilters, string][]
+                ).map(([field, label]) => (
+                  <label key={field} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={tableFilters[field] as boolean}
+                      onChange={(e) => setTableFilters((prev) => ({ ...prev, [field]: e.target.checked }))}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <DialogFooter className="items-center sm:justify-between">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!isTableFiltersActive(tableFilters)}
+                onClick={() => setTableFilters(DEFAULT_TABLE_FILTERS)}
+              >
+                Clear Filters
+              </Button>
+              <Button size="sm" onClick={() => setShowFilterModal(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         {matchesLoading ? (
           <p role="status" className="mb-2 text-sm text-muted-foreground">Loading matching corridors…</p>
         ) : matchesError ? (
@@ -664,6 +1184,12 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
         ) : null}
         {corridors.length > 0 && (
           <p className="mb-2 text-xs text-muted-foreground">{corridors.length} previously saved corridors; {previewRowCount} additional matching previews. Filters do not remove saved work.</p>
+        )}
+        {visibleRowViews.length < displayRows.length && (
+          <p className="mb-2 text-xs text-muted-foreground">
+            Showing {visibleRowViews.length} of {displayRows.length} rows — narrowed by the table filters above (not
+            hidden or removed).
+          </p>
         )}
         {displayRows.length > 0 && (
           <div className="overflow-x-auto">
@@ -676,78 +1202,45 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-                  <th className="pb-2 pr-3 font-medium">Corridor</th>
+                  <SortableHeader label="Corridor" field="corridor" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} />
                   <th className="pb-2 pr-3 font-medium">Pricing</th>
-                  <th className="pb-2 pr-3 font-medium">Funding Currency</th>
+                  <SortableHeader label="Funding Currency" field="fundingCurrency" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} />
                   <th className="pb-2 pr-3 font-medium">Source Currency</th>
                   <th className="pb-2 pr-3 text-right font-medium">Std Fixed Fee</th>
                   <th className="pb-2 pr-3 text-right font-medium">Std Variable Fee %</th>
                   <th className="pb-2 pr-3 text-right font-medium">ATV (USD)</th>
-                  <th className="pb-2 pr-3 text-right font-medium">Yearly Volume</th>
+                  <SortableHeader label="Yearly Volume" field="volume" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
                   <th className="pb-2 pr-3 text-right font-medium">Yearly Trx</th>
                   <th className="pb-2 pr-3 text-right font-medium">Fixed Fee</th>
                   <th className="pb-2 pr-3 text-right font-medium">Variable Fee %</th>
                   <th className="pb-2 pr-3 text-right font-medium">Fee Discount %</th>
                   <th className="pb-2 pr-3 text-right font-medium">FX Spread</th>
-                  <th className="pb-2 pr-3 text-right font-medium">Revenue</th>
+                  <SortableHeader label="Revenue" field="revenue" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
                   <th className="pb-2 pr-3 text-right font-medium">FX Margin %</th>
                   <th className="pb-2 pr-3 text-right font-medium">Margin Fee</th>
                   <th className="pb-2 pr-3 text-right font-medium">Margin Fee %</th>
-                  <th className="pb-2 pr-3 text-right font-medium">Margin %</th>
+                  <SortableHeader label="Margin %" field="marginPct" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
                   <th className="pb-2 pr-3 text-right font-medium">Gross Margin %</th>
-                  <th className="pb-2 pr-3 text-right font-medium">Take Rate</th>
-                  <th className="pb-2 pr-3 text-right font-medium">Approval</th>
+                  <SortableHeader label="Take Rate" field="takeRate" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
+                  <SortableHeader label="Approval" field="approval" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
                   <th className="pb-2" />
                 </tr>
               </thead>
               <tbody>
-                {displayRows.map((item) => {
-                  const corridor = item.kind === 'saved' ? item.row.corridor : item.corridor
-                  const savedRow = item.kind === 'saved' ? item.row : null
-                  const isPreview = item.kind === 'preview'
+                {visibleRowViews.map((row) => {
+                  const {
+                    item,
+                    corridor,
+                    savedRow,
+                    isPreview,
+                    current,
+                    isTiered,
+                    currentTiers,
+                    fundingCurrencyObj,
+                    isDirty,
+                    previewSummary,
+                  } = row
                   const isPromoting = item.kind === 'preview' && promotingKeys.has(item.key)
-                  const saved: EditableFields =
-                    item.kind === 'saved'
-                      ? {
-                          atvUsd: item.row.atvUsd ?? 0,
-                          yearlyVolumeUsd: item.row.yearlyVolumeUsd,
-                          yearlyTransactions: item.row.yearlyTransactions,
-                          fixedFeeUsd: item.row.fixedFeeUsd,
-                          variableFeePct: item.row.variableFeePct,
-                          appliedFxSpread: item.row.appliedFxSpread,
-                          feeDiscountPct: item.row.feeDiscountPct ?? 0,
-                        }
-                      : previewFieldsFor(item.corridor)
-                  const current: EditableFields = {
-                    atvUsd: fieldFor(item.key, saved, 'atvUsd'),
-                    yearlyVolumeUsd: fieldFor(item.key, saved, 'yearlyVolumeUsd'),
-                    yearlyTransactions: fieldFor(item.key, saved, 'yearlyTransactions'),
-                    fixedFeeUsd: fieldFor(item.key, saved, 'fixedFeeUsd'),
-                    variableFeePct: fieldFor(item.key, saved, 'variableFeePct'),
-                    appliedFxSpread: fieldFor(item.key, saved, 'appliedFxSpread'),
-                    feeDiscountPct: fieldFor(item.key, saved, 'feeDiscountPct'),
-                  }
-                  const isTiered = savedRow?.pricingModel === 'tiered'
-                  const currentTiers = savedRow ? tiersFor(savedRow) : []
-                  // Fixed per row — a saved row's own funding currency, or
-                  // the currency this preview slot was generated for. Never
-                  // user-editable after the row exists.
-                  const fundingCurrencyId =
-                    item.kind === 'preview' ? item.fundingCurrencyId : (savedRow?.fundingCurrencyId ?? null)
-                  const pendingEdit = rowEdits[item.key]
-                  const isDirty = Object.keys(pendingEdit ?? {}).length > 0
-                  const previewSummary: PricingSummary | null = !corridor
-                    ? null
-                    : isTiered
-                      ? previewTieredPricing(
-                          current,
-                          current.atvUsd,
-                          currentTiers,
-                          corridor,
-                          fundingCurrencyId,
-                          opportunityType
-                        )
-                      : previewPricing(current, corridor, fundingCurrencyId, opportunityType)
                   const isExpanded = expandedTierRows.has(item.key)
                   const tierVolumeTotal = currentTiers.reduce(
                     (sum, t) => sum + t.yearlyVolumeUsd,
@@ -758,9 +1251,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                     current.yearlyVolumeUsd,
                     currentTiers
                   )
-                  const fundingCurrencyObj = savedRow
-                    ? savedRow.fundingCurrency
-                    : (currencies ?? []).find((c) => c.id === fundingCurrencyId)
 
                   return (
                     <Fragment key={item.key}>

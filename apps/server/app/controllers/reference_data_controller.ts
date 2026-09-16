@@ -71,7 +71,9 @@ export default class ReferenceDataController {
   async corridors({ request }: HttpContext) {
     const { countryId, serviceCode, transactionTypeCode } = request.qs()
 
-    const query = Corridor.query().preload('country').preload('payoutCurrency')
+    const query = Corridor.query()
+      .preload('country', (q) => q.preload('region'))
+      .preload('payoutCurrency')
 
     if (countryId) query.where('countryId', countryId)
     if (serviceCode) query.where('serviceCode', serviceCode)
@@ -99,7 +101,7 @@ export default class ReferenceDataController {
     }
     const corridors = await Corridor.query()
       .whereIn('id', ids)
-      .preload('country')
+      .preload('country', (q) => q.preload('region'))
       .preload('payoutCurrency')
       .orderBy('id')
     return { corridors }
