@@ -2,11 +2,13 @@ import { Fragment, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import {
   computeCorridorPricing,
+  computeQuoteTotals,
   computeTieredCorridorPricing,
   seedQuoteCorridorFromCatalog,
   validateTierAllocation,
   type Corridor,
   type CorridorTierInput,
+  type PricedCorridor,
   type PricingModel,
   type QuoteCorridor,
   type QuoteCorridorInput,
@@ -49,12 +51,14 @@ interface EditableFields {
 /** The fields both a standard and a tiered pricing result share, so the table can display either uniformly. */
 interface PricingSummary {
   totalRevenue: number
+  totalMargin: number
   fxMarginPct: number
   marginFee: number
   marginFeePct: number
   marginPct: number
   grossMarginPct: number
   takeRatePct: number
+  needsApproval: boolean
   needsFinancialApproval: boolean
   financialApprovalReasons: string[]
   needsNetworkApproval: boolean
@@ -360,6 +364,42 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
       })
     ),
   ]
+  // One row-shape adaptation per displayed row (saved or still-preview),
+  // then the actual summing math is fully delegated to the shared
+  // computeQuoteTotals — the same function the backend uses for a quote's
+  // saved-only totals — so this can never drift into its own duplicate
+  // arithmetic.
+  const pricedCorridors: PricedCorridor[] = displayRows.map((item): PricedCorridor => {
+    if (item.kind === 'saved') {
+      return {
+        totalRevenue: item.row.totalRevenue,
+        totalMargin: item.row.totalMargin,
+        yearlyVolumeUsd: item.row.yearlyVolumeUsd,
+        yearlyTransactions: item.row.yearlyTransactions,
+        needsApproval: item.row.needsApproval,
+      }
+    }
+    const saved = previewFieldsFor(item.corridor)
+    const current: EditableFields = {
+      atvUsd: fieldFor(item.key, saved, 'atvUsd'),
+      yearlyVolumeUsd: fieldFor(item.key, saved, 'yearlyVolumeUsd'),
+      yearlyTransactions: fieldFor(item.key, saved, 'yearlyTransactions'),
+      fixedFeeUsd: fieldFor(item.key, saved, 'fixedFeeUsd'),
+      variableFeePct: fieldFor(item.key, saved, 'variableFeePct'),
+      appliedFxSpread: fieldFor(item.key, saved, 'appliedFxSpread'),
+      feeDiscountPct: fieldFor(item.key, saved, 'feeDiscountPct'),
+    }
+    const summary = previewPricing(current, item.corridor, item.fundingCurrencyId, opportunityType)
+    return {
+      totalRevenue: summary.totalRevenue,
+      totalMargin: summary.totalMargin,
+      yearlyVolumeUsd: current.yearlyVolumeUsd,
+      yearlyTransactions: current.yearlyTransactions,
+      needsApproval: summary.needsApproval,
+    }
+  })
+  const quoteTotals = computeQuoteTotals(pricedCorridors)
+
   function fieldFor(key: string, saved: EditableFields, field: keyof EditableFields): number {
     return rowEdits[key]?.[field] ?? saved[field]
   }
@@ -605,6 +645,14 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
           <div className="mb-2 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
             <span>{saveCorridorsError}</span>
+          </div>
+        )}
+        {displayRows.length > 0 && (
+          <div className="mb-3 grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-4">
+            <PreviewStat label="Total Volume" value={money(quoteTotals.totalVolumeUsd)} />
+            <PreviewStat label="Total Transactions" value={quoteTotals.totalTransactions.toLocaleString()} />
+            <PreviewStat label="Total Revenue" value={money(quoteTotals.totalRevenue)} />
+            <PreviewStat label="Average Take Rate" value={pct(quoteTotals.averageTakeRatePct)} />
           </div>
         )}
         {matchesLoading ? (

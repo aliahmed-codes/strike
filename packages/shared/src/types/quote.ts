@@ -1,3 +1,5 @@
+import type { QuoteTotals } from '../lib/quote_totals_math.js'
+
 export type QuoteStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'closed'
 
 export interface Region {
@@ -207,17 +209,6 @@ export interface QuoteListItem {
   createdAt: string
   updatedAt: string
   corridorCount?: number
-}
-
-export interface QuoteTotals {
-  totalRevenue: number
-  totalMargin: number
-  totalVolumeUsd: number
-  totalTransactions: number
-  averageTakeRatePct: number
-  weightedGrossMarginPct: number
-  corridorCount: number
-  corridorsNeedingApproval: number
 }
 
 export interface QuoteShowResponse {
