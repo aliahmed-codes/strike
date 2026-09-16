@@ -155,11 +155,11 @@ export const createQuoteCorridorValidator = vine.compile(
 
 export const updateQuoteCorridorValidator = vine.compile(
   vine.object({
-    fundingCurrencyId: vine
-      .number()
-      .positive()
-      .exists({ table: 'currencies', column: 'id' })
-      .optional(),
+    // fundingCurrencyId is deliberately absent — Phase B decision: a row's
+    // funding currency is fixed once it exists (saved or promoted from
+    // preview). To change it, remove the row and let it reappear as a
+    // preview under the intended currency, rather than allowing an in-place
+    // edit that could collide with another row already using that currency.
     atvUsd: vine.number().min(0).optional(),
     yearlyVolumeUsd: vine.number().min(0).optional(),
     yearlyTransactions: vine.number().min(0).optional(),

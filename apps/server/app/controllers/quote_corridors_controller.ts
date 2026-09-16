@@ -172,12 +172,22 @@ export default class QuoteCorridorsController {
 
     const payload = await request.validateUsing(createQuoteCorridorValidator)
 
-    const alreadyAdded = await QuoteCorridor.query()
+    // Scoped by funding currency too (Phase B) — the same corridor can be
+    // added once per funding currency on the quote, but not twice for the
+    // *same* one. `whereNull` handles "no funding currency" as its own
+    // distinct case, matching the DB's COALESCE-based unique index below.
+    const alreadyAddedQuery = QuoteCorridor.query()
       .where('quoteId', quote!.id)
       .where('corridorId', payload.corridorId)
-      .first()
+    const alreadyAdded = await (
+      payload.fundingCurrencyId
+        ? alreadyAddedQuery.where('fundingCurrencyId', payload.fundingCurrencyId)
+        : alreadyAddedQuery.whereNull('fundingCurrencyId')
+    ).first()
     if (alreadyAdded) {
-      return response.conflict({ message: 'This corridor has already been added to the quote' })
+      return response.conflict({
+        message: 'This corridor has already been added to the quote for this funding currency',
+      })
     }
 
     const corridor = await Corridor.findOrFail(payload.corridorId)

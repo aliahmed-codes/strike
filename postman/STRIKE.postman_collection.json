@@ -222,7 +222,7 @@
               "host": ["{{base_url}}"],
               "path": ["quotes", "{{quote_id}}", "corridors"]
             },
-            "description": "Adds a corridor from the catalog to the quote. The backend computes revenue/FX margin/margin fee/gross margin/take-rate using the corridor's real cost/FX-source master data, and flags approval via two independent checks: needs_financial_approval (margin/pricing rules, with financial_approval_reasons) and needs_network_approval (a lookup on the corridor catalog's own Need Approval/Internal/Central Bank fields, with network_approval_reasons) — needs_approval/approval_reasons remain the combined OR of both for backward compatibility. None of this is trusted from the request body. Run \"List Corridors (catalog)\" first to populate {{corridor_id}}."
+            "description": "Adds a corridor from the catalog to the quote. The backend computes revenue/FX margin/margin fee/gross margin/take-rate using the corridor's real cost/FX-source master data, and flags approval via two independent checks: needs_financial_approval (margin/pricing rules, with financial_approval_reasons) and needs_network_approval (a lookup on the corridor catalog's own Need Approval/Internal/Central Bank fields, with network_approval_reasons) — needs_approval/approval_reasons remain the combined OR of both for backward compatibility. None of this is trusted from the request body. Run \"List Corridors (catalog)\" first to populate {{corridor_id}}. Optionally accepts a `fundingCurrencyId` — the same corridor can be added once per funding currency on the quote (Phase B); repeating this request unchanged (same corridor, same funding currency or none) returns 409. See \"Add Corridor to Quote (Different Funding Currency)\"."
           },
           "event": [
             {
@@ -233,6 +233,35 @@
                   "pm.test('Created (201)', () => pm.response.to.have.status(201));",
                   "if (pm.response.code === 201) pm.environment.set('quote_corridor_id', pm.response.json().id);"
                 ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add Corridor to Quote (Different Funding Currency)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"corridorId\": {{corridor_id}},\n  \"fundingCurrencyId\": {{funding_currency_id}},\n  \"yearlyVolumeUsd\": 1000000,\n  \"yearlyTransactions\": 20000,\n  \"fixedFeeUsd\": 0.3,\n  \"variableFeePct\": 1.2,\n  \"appliedFxSpread\": 0.5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/corridors",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}", "corridors"]
+            },
+            "description": "Phase B: the same corridor, added again under a different `{{funding_currency_id}}` than any already used for it on this quote — succeeds (201) as an independent row, rather than the 409 you'd get from repeating \"Add Corridor to Quote\" unchanged. Run \"List Currencies\" first to populate {{funding_currency_id}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Created (201)', () => pm.response.to.have.status(201));"]
               }
             }
           ]
@@ -271,7 +300,7 @@
               "host": ["{{base_url}}"],
               "path": ["quotes", "{{quote_id}}", "corridors", "{{quote_corridor_id}}"]
             },
-            "description": "Updates pricing inputs for a corridor already on the quote — the backend recomputes revenue/FX margin/margin fee/gross margin/take-rate and both approval checks (financial + network, see \"Add Corridor to Quote\") from the merged values. Can also include `pricingModel` (\"standard\"/\"tiered\") and `tiers` (see \"Add Tiered Corridor to Quote\") — switching to \"standard\" deletes the corridor's tier rows; omitting `tiers` while already tiered re-prices using whatever tiers are already saved (e.g. after changing yearlyVolumeUsd alone)."
+            "description": "Updates pricing inputs for a corridor already on the quote — the backend recomputes revenue/FX margin/margin fee/gross margin/take-rate and both approval checks (financial + network, see \"Add Corridor to Quote\") from the merged values. Can also include `pricingModel` (\"standard\"/\"tiered\") and `tiers` (see \"Add Tiered Corridor to Quote\") — switching to \"standard\" deletes the corridor's tier rows; omitting `tiers` while already tiered re-prices using whatever tiers are already saved (e.g. after changing yearlyVolumeUsd alone). `fundingCurrencyId` is deliberately not accepted here (Phase B decision) — a row's funding currency is fixed once it exists; sending it is silently ignored rather than erroring."
           }
         },
         {

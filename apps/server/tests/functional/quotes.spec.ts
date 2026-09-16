@@ -355,6 +355,156 @@ test.group('Quote corridors', () => {
     response.assertStatus(409)
   })
 
+  test('allows the same corridor twice for two different funding currencies', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+    const eur = await Currency.create({
+      isoCode3: 'EUR',
+      name: 'Euro',
+      decimalPlaces: 2,
+      isSource: true,
+      isFunding: true,
+      isPayout: true,
+      isFee: true,
+      isHard: true,
+      isPegged: false,
+    })
+    const gbp = await Currency.create({
+      isoCode3: 'GBP',
+      name: 'Pound Sterling',
+      decimalPlaces: 2,
+      isSource: true,
+      isFunding: true,
+      isPayout: true,
+      isFee: true,
+      isHard: true,
+      isPegged: false,
+    })
+
+    const base = {
+      corridorId: corridor.id,
+      yearlyVolumeUsd: 1_000_000,
+      yearlyTransactions: 10_000,
+      fixedFeeUsd: 0.5,
+      variableFeePct: 1,
+      appliedFxSpread: 0.5,
+    }
+
+    const eurRow = await client
+      .post(`/quotes/${quote.id}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ ...base, fundingCurrencyId: eur.id })
+    const gbpRow = await client
+      .post(`/quotes/${quote.id}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ ...base, fundingCurrencyId: gbp.id })
+
+    eurRow.assertStatus(201)
+    gbpRow.assertStatus(201)
+    assert.notEqual(eurRow.body().id, gbpRow.body().id)
+    assert.equal(eurRow.body().fundingCurrencyId, eur.id)
+    assert.equal(gbpRow.body().fundingCurrencyId, gbp.id)
+  })
+
+  test('rejects the same corridor added twice for the same funding currency', async ({
+    client,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+    const eur = await Currency.create({
+      isoCode3: 'EUR',
+      name: 'Euro',
+      decimalPlaces: 2,
+      isSource: true,
+      isFunding: true,
+      isPayout: true,
+      isFee: true,
+      isHard: true,
+      isPegged: false,
+    })
+
+    const payload = {
+      corridorId: corridor.id,
+      fundingCurrencyId: eur.id,
+      yearlyVolumeUsd: 1_000_000,
+      yearlyTransactions: 10_000,
+      fixedFeeUsd: 0.5,
+      variableFeePct: 1,
+      appliedFxSpread: 0.5,
+    }
+
+    await client
+      .post(`/quotes/${quote.id}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json(payload)
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json(payload)
+
+    response.assertStatus(409)
+  })
+
+  test("cannot change a corridor row's funding currency once it is saved", async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+    const eur = await Currency.create({
+      isoCode3: 'EUR',
+      name: 'Euro',
+      decimalPlaces: 2,
+      isSource: true,
+      isFunding: true,
+      isPayout: true,
+      isFee: true,
+      isHard: true,
+      isPegged: false,
+    })
+    const gbp = await Currency.create({
+      isoCode3: 'GBP',
+      name: 'Pound Sterling',
+      decimalPlaces: 2,
+      isSource: true,
+      isFunding: true,
+      isPayout: true,
+      isFee: true,
+      isHard: true,
+      isPegged: false,
+    })
+
+    const created = await client
+      .post(`/quotes/${quote.id}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        corridorId: corridor.id,
+        fundingCurrencyId: eur.id,
+        yearlyVolumeUsd: 1_000_000,
+        yearlyTransactions: 10_000,
+        fixedFeeUsd: 0.5,
+        variableFeePct: 1,
+        appliedFxSpread: 0.5,
+      })
+
+    // Sending fundingCurrencyId on PATCH is silently ignored (not a
+    // validation error) — it's simply not a field this endpoint accepts.
+    const response = await client
+      .patch(`/quotes/${quote.id}/corridors/${created.body().id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ fundingCurrencyId: gbp.id, yearlyVolumeUsd: 2_000_000 })
+
+    response.assertStatus(200)
+    assert.equal(response.body().fundingCurrencyId, eur.id)
+    assert.equal(response.body().yearlyVolumeUsd, 2_000_000)
+  })
+
   test('rejects a corridor id that does not exist in the catalog', async ({ client }) => {
     const { token, user } = await createUserWithToken()
     const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
