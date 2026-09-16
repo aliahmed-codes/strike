@@ -2,8 +2,11 @@ import { Fragment, useState, type ReactNode } from 'react'
 import { AlertTriangle, Filter } from 'lucide-react'
 import {
   computeCorridorPricing,
+  computeFxDefaultSpreadPct,
+  computeFxMinimumSpreadPct,
   computeQuoteTotals,
   computeTieredCorridorPricing,
+  computeTreasuryFxCostPct,
   seedQuoteCorridorFromCatalog,
   validateTierAllocation,
   type Corridor,
@@ -296,9 +299,31 @@ const EMPTY_TIER: Omit<CorridorTierInput, 'tierNumber'> = {
   appliedFxSpread: 0,
 }
 
+type BulkEditField = keyof EditableFields | 'fixedFeeInSelectedCurrency' | 'mbpPricing'
+
+const BULK_EDIT_FIELDS: {
+  field: BulkEditField
+  label: string
+  isPercent: boolean
+  allowNegative: boolean
+  /** No real data source exists for this yet (see FEATURES.md) — shown in the dropdown for visual parity with the old app, but Apply stays disabled rather than silently applying fake/zeroed values. */
+  notYetAvailable?: boolean
+}[] = [
+  { field: 'atvUsd', label: 'ATV (USD)', isPercent: false, allowNegative: false },
+  { field: 'yearlyVolumeUsd', label: 'Yearly Volume (USD)', isPercent: false, allowNegative: false },
+  { field: 'yearlyTransactions', label: 'Yearly Transactions', isPercent: false, allowNegative: false },
+  { field: 'fixedFeeUsd', label: 'Fixed Fee (USD)', isPercent: false, allowNegative: false },
+  { field: 'fixedFeeInSelectedCurrency', label: 'Fixed Fee (Selected Currency)', isPercent: false, allowNegative: false },
+  { field: 'variableFeePct', label: 'Variable Fee %', isPercent: true, allowNegative: false },
+  { field: 'appliedFxSpread', label: 'Applied FX Spread %', isPercent: true, allowNegative: false },
+  { field: 'feeDiscountPct', label: 'Fee Discount %', isPercent: true, allowNegative: true },
+  { field: 'mbpPricing', label: 'Apply Market-Based Pricing (MBP)', isPercent: false, allowNegative: false, notYetAvailable: true },
+]
+
 const pct = (n: number | null) => (n === null ? '—' : `${n.toFixed(2)}%`)
 const money = (n: number | null) =>
   n === null ? '—' : `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+const round2 = (n: number) => Math.round(n * 100) / 100
 
 /**
  * A static conversion rate, not a live rate feed — only ~14 currencies have
@@ -314,6 +339,34 @@ function feeInFundingCurrency(
   if (currency.feeConversionRateToUsd === null) return 'No rate available'
   const converted = amountUsd * currency.feeConversionRateToUsd
   return `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency.isoCode3}`
+}
+
+/**
+ * The reverse of `feeInFundingCurrency` — converts an amount typed in a
+ * given currency back to USD, for a "Fee (Selected Currency)" input to
+ * stage. Returns null (rather than a fabricated 1:1 rate) when the
+ * currency has no real conversion rate, matching this app's existing
+ * convention for every other currency-conversion display.
+ */
+function feeCurrencyToUsd(
+  amountInCurrency: number,
+  currency: { isoCode3: string; feeConversionRateToUsd: number | null } | undefined
+): number | null {
+  if (!currency) return null
+  if (currency.isoCode3 === 'USD') return amountInCurrency
+  if (!currency.feeConversionRateToUsd) return null
+  return amountInCurrency / currency.feeConversionRateToUsd
+}
+
+/** The forward direction of `feeCurrencyToUsd` — same null-when-uncovered rule. */
+function usdToFeeCurrencyAmount(
+  amountUsd: number,
+  currency: { isoCode3: string; feeConversionRateToUsd: number | null } | undefined
+): number | null {
+  if (!currency) return null
+  if (currency.isoCode3 === 'USD') return amountUsd
+  if (!currency.feeConversionRateToUsd) return null
+  return amountUsd * currency.feeConversionRateToUsd
 }
 
 /** Live-preview math — the exact same function the backend uses to compute and validate on save, so this can never drift from what actually gets persisted. */
@@ -582,6 +635,12 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   const [sortState, setSortState] = useState<SortState | null>(null)
   const [tableFilters, setTableFilters] = useState<TableFilters>(DEFAULT_TABLE_FILTERS)
   const [showFilterModal, setShowFilterModal] = useState(false)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set())
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false)
+  const [bulkEditField, setBulkEditField] = useState<BulkEditField | ''>('')
+  const [bulkEditValue, setBulkEditValue] = useState('')
+  const [fxSpreadMode, setFxSpreadMode] = useState<'custom' | 'default' | 'minimum' | 'markup'>('custom')
+  const [fxMarkupValue, setFxMarkupValue] = useState('')
 
   const quote = data?.quote
   // The Pricing tab previews against the *applied* filters, not the live
@@ -604,12 +663,22 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
     'fundingCurrencyIds',
     []
   )
+  const [pendingDefaultFeeCurrencyId] = useQuoteFormField(
+    tabKey,
+    quote?.defaultFeeCurrencyId,
+    'defaultFeeCurrencyId',
+    null
+  )
 
   if (isLoading || !data) {
     return <Skeleton className="h-64" />
   }
 
   const opportunityType = data.quote.opportunityType ?? null
+  // The quote-level "Default Fee Currency" (Summary tab) — independent of
+  // any corridor's funding/payout currency. Resolved from the pending
+  // (unsaved) selection first, same reasoning as funding currencies above.
+  const feeCurrency = currencies?.find((c) => c.id === pendingDefaultFeeCurrencyId)
   const corridors = data.quote.corridors ?? []
   const savedPairKeys = new Set(
     corridors.map((c) => savedPairKey(c.corridorId, c.fundingCurrencyId ?? null))
@@ -714,6 +783,108 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
 
   function handleFieldChange(key: string, field: keyof EditableFields, value: number) {
     setRowField(tabKey, key, field, value)
+  }
+
+  /**
+   * Applying a discount/fee against a corridor's own standard reference fee
+   * (falling back through fixed fee, then variable fee, per corridor) —
+   * shared between manual bulk-field entry and its reciprocal, so both
+   * directions use identical fallback logic.
+   */
+  function reciprocalFeeDiscountEdits(
+    row: RowView,
+    field: 'feeDiscountPct' | 'fixedFeeUsd' | 'variableFeePct',
+    value: number
+  ): Partial<EditableFields> {
+    const std = row.corridor
+    if (field === 'feeDiscountPct') {
+      if (std?.stdFixedFeeUsd) return { fixedFeeUsd: round2(std.stdFixedFeeUsd * (1 - value / 100)) }
+      if (std?.stdVariableFeePct) return { variableFeePct: round2(std.stdVariableFeePct * (1 - value / 100)) }
+      return {}
+    }
+    const reference = field === 'fixedFeeUsd' ? std?.stdFixedFeeUsd : std?.stdVariableFeePct
+    if (!reference) return {}
+    return { feeDiscountPct: round2((1 - value / reference) * 100) }
+  }
+
+  /**
+   * The FX Spread presets need a per-row value (each corridor has its own
+   * treasury cost and currencies), unlike every other bulk-edit field which
+   * applies one shared value to every selected row.
+   */
+  function resolveFxSpreadForRow(row: RowView): number | null {
+    if (fxSpreadMode === 'custom') {
+      const value = Number(bulkEditValue)
+      return Number.isNaN(value) ? null : value
+    }
+    if (!row.corridor) return null
+    const fundingIso = row.fundingCurrencyObj?.isoCode3
+    const payoutIso = row.corridor.payoutCurrency?.isoCode3 ?? ''
+    if (fxSpreadMode === 'default') {
+      return computeFxDefaultSpreadPct(row.corridor.treasuryFxCostSpread, fundingIso, payoutIso)
+    }
+    if (fxSpreadMode === 'minimum') {
+      return computeFxMinimumSpreadPct(row.corridor.treasuryFxCostSpread, fundingIso, payoutIso)
+    }
+    // markup: treasury cost + a user-entered markup on top, per the old app's real preset.
+    const markup = Number(fxMarkupValue)
+    if (Number.isNaN(markup)) return null
+    return round2(computeTreasuryFxCostPct(row.corridor.treasuryFxCostSpread) + markup)
+  }
+
+  function applyBulkEdit() {
+    if (!bulkEditField) return
+    if (BULK_EDIT_FIELDS.find((f) => f.field === bulkEditField)?.notYetAvailable) return
+
+    if (bulkEditField === 'appliedFxSpread') {
+      for (const key of selectedRowKeys) {
+        const row = rowViews.find((r) => r.item.key === key)
+        if (!row) continue
+        const spread = resolveFxSpreadForRow(row)
+        if (spread !== null) setRowField(tabKey, key, 'appliedFxSpread', spread)
+      }
+      setShowBulkEditModal(false)
+      setBulkEditField('')
+      setBulkEditValue('')
+      setFxSpreadMode('custom')
+      setFxMarkupValue('')
+      return
+    }
+
+    const value = Number(bulkEditValue)
+    if (Number.isNaN(value)) return
+
+    // "Fixed Fee (Selected Currency)" isn't a stored field itself — it
+    // reverse-converts to fixedFeeUsd (same quote-level rate for every
+    // selected row), then behaves exactly like a Fixed Fee (USD) bulk edit.
+    const resolvedField: keyof EditableFields | null =
+      bulkEditField === 'fixedFeeInSelectedCurrency' ? 'fixedFeeUsd' : bulkEditField === 'mbpPricing' ? null : bulkEditField
+    const resolvedValue =
+      bulkEditField === 'fixedFeeInSelectedCurrency' ? feeCurrencyToUsd(value, feeCurrency) : value
+    if (resolvedField === null || resolvedValue === null) return
+
+    for (const key of selectedRowKeys) {
+      const row = rowViews.find((r) => r.item.key === key)
+      if (!row) continue
+
+      setRowField(tabKey, key, resolvedField, resolvedValue)
+
+      if (resolvedField === 'feeDiscountPct' || resolvedField === 'fixedFeeUsd' || resolvedField === 'variableFeePct') {
+        for (const [field, reciprocalValue] of Object.entries(
+          reciprocalFeeDiscountEdits(row, resolvedField, resolvedValue)
+        )) {
+          setRowField(tabKey, key, field as keyof EditableFields, reciprocalValue as number)
+        }
+      } else if (resolvedField === 'yearlyVolumeUsd' || resolvedField === 'atvUsd') {
+        const atv = resolvedField === 'atvUsd' ? resolvedValue : row.current.atvUsd
+        const volume = resolvedField === 'yearlyVolumeUsd' ? resolvedValue : row.current.yearlyVolumeUsd
+        if (atv > 0) setRowField(tabKey, key, 'yearlyTransactions', Math.round(volume / atv))
+      }
+    }
+
+    setShowBulkEditModal(false)
+    setBulkEditField('')
+    setBulkEditValue('')
   }
 
   /**
@@ -1020,6 +1191,11 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                 Clear filters
               </Button>
             )}
+            {selectedRowKeys.size > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setShowBulkEditModal(true)}>
+                Bulk Edit ({selectedRowKeys.size})
+              </Button>
+            )}
           </div>
         )}
         <Dialog open={showFilterModal} onOpenChange={setShowFilterModal}>
@@ -1175,6 +1351,140 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        <Dialog open={showBulkEditModal} onOpenChange={setShowBulkEditModal}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Bulk Edit {selectedRowKeys.size} Corridors</DialogTitle>
+              <DialogDescription>Applies to every currently selected row as a staged edit — nothing saves until "Save Edited Corridors".</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <FormField label="Field to Edit">
+                <SimpleSelect
+                  value={bulkEditField}
+                  onValueChange={(v) => {
+                    setBulkEditField(v as BulkEditField)
+                    setBulkEditValue('')
+                  }}
+                  options={BULK_EDIT_FIELDS.map((f) => ({ value: f.field, label: f.label }))}
+                  placeholder="Select field…"
+                />
+              </FormField>
+              {bulkEditField === 'fixedFeeInSelectedCurrency' && !feeCurrency?.feeConversionRateToUsd && feeCurrency?.isoCode3 !== 'USD' && (
+                <p className="text-xs text-destructive">
+                  No conversion rate available for {feeCurrency?.isoCode3 ?? 'the selected fee currency'} — set a
+                  Default Fee Currency with a real rate on the Summary tab first.
+                </p>
+              )}
+              {bulkEditField === 'appliedFxSpread' && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">New Value:</p>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      checked={fxSpreadMode === 'custom'}
+                      onChange={() => setFxSpreadMode('custom')}
+                    />
+                    Custom Value:
+                    <span className="relative flex-1">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        disabled={fxSpreadMode !== 'custom'}
+                        value={bulkEditValue}
+                        onChange={(e) => {
+                          setFxSpreadMode('custom')
+                          setBulkEditValue(e.target.value)
+                        }}
+                      />
+                      <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="radio" checked={fxSpreadMode === 'default'} onChange={() => setFxSpreadMode('default')} />
+                    Use Default Spread for each corridor
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="radio" checked={fxSpreadMode === 'minimum'} onChange={() => setFxSpreadMode('minimum')} />
+                    Use Minimum Spread for each corridor
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="radio" checked={fxSpreadMode === 'markup'} onChange={() => setFxSpreadMode('markup')} />
+                    Apply FX Markup (Treasury Cost + Markup %)
+                  </label>
+                  {fxSpreadMode === 'markup' && (
+                    <FormField label="Markup %">
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={fxMarkupValue}
+                          onChange={(e) => setFxMarkupValue(e.target.value)}
+                        />
+                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                      </div>
+                    </FormField>
+                  )}
+                </div>
+              )}
+              {bulkEditField === 'mbpPricing' && (
+                <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+                  <p className="mb-1 font-medium">Market-Based Pricing will be applied to selected corridors:</p>
+                  <ul className="list-disc space-y-0.5 pl-4">
+                    <li>Fixed/Variable fees adjusted per MBP recommendations</li>
+                    <li>FX spread adjusted based on MBP guidelines</li>
+                    <li>Corridors without MBP data will be skipped</li>
+                  </ul>
+                  <p className="mt-2 font-medium">Not yet available in this app — no MBP data source exists here yet.</p>
+                </div>
+              )}
+              {bulkEditField && bulkEditField !== 'mbpPricing' && bulkEditField !== 'appliedFxSpread' && (
+                <FormField label="New Value">
+                  {(() => {
+                    const meta = BULK_EDIT_FIELDS.find((f) => f.field === bulkEditField)!
+                    const suffix = bulkEditField === 'fixedFeeInSelectedCurrency' ? feeCurrency?.isoCode3 : meta.isPercent ? '%' : undefined
+                    return (
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          step={meta.isPercent ? '0.01' : '1'}
+                          min={meta.allowNegative ? undefined : 0}
+                          value={bulkEditValue}
+                          onChange={(e) => setBulkEditValue(e.target.value)}
+                        />
+                        {suffix && (
+                          <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">{suffix}</span>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </FormField>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setShowBulkEditModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={applyBulkEdit}
+                disabled={
+                  !bulkEditField ||
+                  BULK_EDIT_FIELDS.find((f) => f.field === bulkEditField)?.notYetAvailable ||
+                  (bulkEditField === 'appliedFxSpread'
+                    ? (fxSpreadMode === 'custom' && (bulkEditValue === '' || Number.isNaN(Number(bulkEditValue)))) ||
+                      (fxSpreadMode === 'markup' && (fxMarkupValue === '' || Number.isNaN(Number(fxMarkupValue))))
+                    : bulkEditValue === '' ||
+                      Number.isNaN(Number(bulkEditValue)) ||
+                      (bulkEditField === 'fixedFeeInSelectedCurrency' && feeCurrencyToUsd(Number(bulkEditValue), feeCurrency) === null))
+                }
+              >
+                Apply to {selectedRowKeys.size} Corridors
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         {matchesLoading ? (
           <p role="status" className="mb-2 text-sm text-muted-foreground">Loading matching corridors…</p>
         ) : matchesError ? (
@@ -1202,6 +1512,17 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
+                  <th className="pb-2 pr-3">
+                    <input
+                      type="checkbox"
+                      checked={visibleRowViews.length > 0 && visibleRowViews.every((r) => selectedRowKeys.has(r.item.key))}
+                      onChange={(e) =>
+                        setSelectedRowKeys(
+                          e.target.checked ? new Set(visibleRowViews.map((r) => r.item.key)) : new Set()
+                        )
+                      }
+                    />
+                  </th>
                   <SortableHeader label="Corridor" field="corridor" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} />
                   <th className="pb-2 pr-3 font-medium">Pricing</th>
                   <SortableHeader label="Funding Currency" field="fundingCurrency" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} />
@@ -1212,6 +1533,9 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                   <SortableHeader label="Yearly Volume" field="volume" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
                   <th className="pb-2 pr-3 text-right font-medium">Yearly Trx</th>
                   <th className="pb-2 pr-3 text-right font-medium">Fixed Fee</th>
+                  <th className="pb-2 pr-3 text-right font-medium">
+                    Fee ({feeCurrency?.isoCode3 ?? 'Selected Currency'})
+                  </th>
                   <th className="pb-2 pr-3 text-right font-medium">Variable Fee %</th>
                   <th className="pb-2 pr-3 text-right font-medium">Fee Discount %</th>
                   <th className="pb-2 pr-3 text-right font-medium">FX Spread</th>
@@ -1263,6 +1587,20 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                               : 'border-b last:border-0'
                         }
                       >
+                        <td className="py-2 pr-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedRowKeys.has(item.key)}
+                            onChange={() =>
+                              setSelectedRowKeys((prev) => {
+                                const next = new Set(prev)
+                                if (next.has(item.key)) next.delete(item.key)
+                                else next.add(item.key)
+                                return next
+                              })
+                            }
+                          />
+                        </td>
                         <td className="py-2 pr-3 font-medium">
                           <div className="flex items-center gap-2">
                             <span>
@@ -1395,6 +1733,26 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
+                          {(() => {
+                            const inCurrency = usdToFeeCurrencyAmount(current.fixedFeeUsd, feeCurrency)
+                            if (inCurrency === null) {
+                              return <span className="text-xs text-muted-foreground">No rate available</span>
+                            }
+                            return (
+                              <Input
+                                type="number"
+                                step="0.001"
+                                value={inCurrency}
+                                className="h-8 w-24"
+                                onChange={(e) => {
+                                  const usd = feeCurrencyToUsd(Number(e.target.value), feeCurrency)
+                                  if (usd !== null) handleFieldChange(item.key, 'fixedFeeUsd', usd)
+                                }}
+                              />
+                            )
+                          })()}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
                           <Input
                             type="number"
                             step="0.01"
@@ -1485,7 +1843,7 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                       </tr>
                       {expandedDetailRows.has(item.key) && corridor && (
                         <tr className="border-b bg-muted/20 last:border-0">
-                          <td colSpan={21} className="p-3">
+                          <td colSpan={23} className="p-3">
                             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                               <PreviewStat
                                 label="Treasury FX Cost Spread %"
@@ -1525,7 +1883,7 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                       )}
                       {savedRow && isTiered && isExpanded && (
                         <tr className="border-b bg-muted/20 last:border-0">
-                          <td colSpan={21} className="p-3">
+                          <td colSpan={23} className="p-3">
                             <div className="space-y-3">
                               <div className="flex items-center justify-between">
                                 <p className="text-xs font-medium text-muted-foreground uppercase">
