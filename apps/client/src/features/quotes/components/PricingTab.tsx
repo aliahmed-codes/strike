@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react'
 import {
   computeCorridorPricing,
   computeTieredCorridorPricing,
+  seedQuoteCorridorFromCatalog,
   validateTierAllocation,
   type Corridor,
   type CorridorTierInput,
@@ -13,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
-import { useCorridorCatalog, useCurrencies } from '../api/useReferenceData'
+import { useCorridorCatalog, useCorridorFacets, useCurrencies, useMatchingCorridors } from '../api/useReferenceData'
 import { useQuote } from '../api/useQuotes'
 import {
   useAddQuoteCorridor,
@@ -21,8 +22,11 @@ import {
   useUpdateQuoteCorridor,
 } from '../api/useQuoteCorridors'
 import { CollapsibleSection } from './CollapsibleSection'
+import { CorridorsToOfferSection, corridorLabel, useCorridorFilterFields } from './CorridorsToOfferSection'
 import { FormField } from './FormField'
 import { SimpleSelect } from './SimpleSelect'
+
+const RESTRICTED_USE_CASE_LABELS = new Set(['last mile payout', 'account top-up'])
 
 interface EditableFields {
   atvUsd: number
@@ -48,6 +52,17 @@ interface PricingSummary {
   needsNetworkApproval: boolean
   networkApprovalReasons: string[]
 }
+
+/**
+ * One row on the "Priced Corridors" table — either a real saved
+ * `quote_corridors` row, or a corridor matched by the "Corridors to Offer"
+ * filters that hasn't been edited (and therefore saved) yet. Saved rows
+ * always render, unconditionally, regardless of the current filters — only
+ * preview rows come and go as filters change. See FEATURES.md Phase 1b.
+ */
+type DisplayRow =
+  | { kind: 'saved'; key: string; row: QuoteCorridor }
+  | { kind: 'preview'; key: string; corridor: Corridor }
 
 const EMPTY_DRAFT: Omit<QuoteCorridorInput, 'corridorId'> = {
   fundingCurrencyId: null,
@@ -145,6 +160,20 @@ function previewTieredPricing(
   })
 }
 
+/** A preview row's starting numbers — same seed used to build its promote-on-edit payload, so it never shows different numbers than the row it becomes. */
+function previewFieldsFor(corridor: Corridor): EditableFields {
+  const seed = seedQuoteCorridorFromCatalog(corridor)
+  return {
+    atvUsd: seed.atvUsd ?? 0,
+    yearlyVolumeUsd: seed.yearlyVolumeUsd,
+    yearlyTransactions: seed.yearlyTransactions,
+    fixedFeeUsd: seed.fixedFeeUsd,
+    variableFeePct: seed.variableFeePct,
+    appliedFxSpread: seed.appliedFxSpread,
+    feeDiscountPct: seed.feeDiscountPct ?? 0,
+  }
+}
+
 function ApprovalBadge({
   label,
   needed,
@@ -200,7 +229,7 @@ function ApprovalCell({
 }
 
 export function PricingTab({
-  tabKey: _tabKey,
+  tabKey,
   quoteId,
 }: {
   tabKey: string
@@ -218,10 +247,10 @@ export function PricingTab({
     )
   }
 
-  return <PricingTabContent quoteId={quoteId} />
+  return <PricingTabContent tabKey={tabKey} quoteId={quoteId} />
 }
 
-function PricingTabContent({ quoteId }: { quoteId: number }) {
+function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: number }) {
   const { data, isLoading } = useQuote(quoteId)
   const { data: corridorCatalog } = useCorridorCatalog()
   const { data: currencies } = useCurrencies()
@@ -232,15 +261,36 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
 
   const [selectedCorridorId, setSelectedCorridorId] = useState<number | null>(null)
   const [draft, setDraft] = useState(EMPTY_DRAFT)
-  // Per-row in-progress edits, keyed by quote_corridor row id — only the
-  // fields the user has touched since the row last loaded/saved. Cleared
-  // once the blur-triggered save for that row succeeds.
-  const [rowEdits, setRowEdits] = useState<Record<number, Partial<EditableFields>>>({})
+  // Per-row in-progress edits, keyed by a string row key — `String(id)` for a
+  // saved row, `preview-${corridorId}` for one still only matched by filters
+  // — holding only the fields touched since the row last loaded/saved/
+  // promoted. Cleared once the blur-triggered save (or promotion) succeeds.
+  const [rowEdits, setRowEdits] = useState<Record<string, Partial<EditableFields> & { fundingCurrencyId?: number | null }>>({})
   // Per-row in-progress tier edits — replaces the whole tier set for that
   // row until "Save Tiers" is clicked, then cleared so the saved data takes over.
-  const [tierDrafts, setTierDrafts] = useState<Record<number, CorridorTierInput[]>>({})
-  const [expandedTierRows, setExpandedTierRows] = useState<Set<number>>(new Set())
-  const [expandedDetailRows, setExpandedDetailRows] = useState<Set<number>>(new Set())
+  const [tierDrafts, setTierDrafts] = useState<Record<string, CorridorTierInput[]>>({})
+  const [expandedTierRows, setExpandedTierRows] = useState<Set<string>>(new Set())
+  const [expandedDetailRows, setExpandedDetailRows] = useState<Set<string>>(new Set())
+  // Corridor ids currently being promoted (POSTed) from a preview row — a
+  // guard so two blur events in quick succession for the same still-unsaved
+  // row don't both create a real row (the backend's 409-on-duplicate would
+  // otherwise surface as a visible error).
+  const [promotingCorridorIds, setPromotingCorridorIds] = useState<Set<number>>(new Set())
+  // A saved row the user explicitly removed, or a preview row they explicitly
+  // dismissed — kept client-side only, for this session, so it doesn't
+  // immediately reappear as a preview row while it still matches the active
+  // filters (the old app needs a whole `deleted_corridors` column + restore
+  // modal to manage the fallout of NOT doing this; we just don't persist it).
+  const [dismissedCorridorIds, setDismissedCorridorIds] = useState<Set<number>>(new Set())
+
+  const quote = data?.quote
+  const { filters } = useCorridorFilterFields(tabKey, quote)
+  const restrictToUseCaseAllowedCountries = (quote?.useCases ?? []).some((u) =>
+    RESTRICTED_USE_CASE_LABELS.has(u.label.toLowerCase())
+  )
+  const filterParams = { ...filters, restrictToUseCaseAllowedCountries }
+  const { data: facets } = useCorridorFacets(filterParams)
+  const { data: matches, isPending: matchesLoading, isError: matchesError } = useMatchingCorridors(filterParams, true)
 
   if (isLoading || !data) {
     return <Skeleton className="h-64" />
@@ -248,8 +298,19 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
 
   const opportunityType = data.quote.opportunityType ?? null
   const corridors = data.quote.corridors ?? []
-  const addedCorridorIds = new Set(corridors.map((c) => c.corridorId))
-  const availableCorridors = (corridorCatalog ?? []).filter((c) => !addedCorridorIds.has(c.id))
+  const savedCorridorIds = new Set(corridors.map((c) => c.corridorId))
+  const previewCorridors = (matchesError ? [] : (matches ?? [])).filter(
+    (c) => !savedCorridorIds.has(c.id) && !dismissedCorridorIds.has(c.id)
+  )
+  const displayRows: DisplayRow[] = [
+    ...corridors.map((row): DisplayRow => ({ kind: 'saved', key: String(row.id), row })),
+    ...previewCorridors.map((corridor): DisplayRow => ({
+      kind: 'preview',
+      key: `preview-${corridor.id}`,
+      corridor,
+    })),
+  ]
+  const availableCorridors = (corridorCatalog ?? []).filter((c) => !savedCorridorIds.has(c.id))
   const selectedCorridor = availableCorridors.find((c) => c.id === selectedCorridorId) ?? null
 
   const newCorridorPreview = selectedCorridor
@@ -282,35 +343,111 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
     )
   }
 
-  function fieldFor(rowId: number, saved: EditableFields, field: keyof EditableFields): number {
-    return rowEdits[rowId]?.[field] ?? saved[field]
+  function fieldFor(key: string, saved: EditableFields, field: keyof EditableFields): number {
+    return rowEdits[key]?.[field] ?? saved[field]
   }
 
-  function handleFieldChange(rowId: number, field: keyof EditableFields, value: number) {
-    setRowEdits((prev) => ({ ...prev, [rowId]: { ...prev[rowId], [field]: value } }))
+  function handleFieldChange(key: string, field: keyof EditableFields, value: number) {
+    setRowEdits((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }))
   }
 
-  function commitRow(rowId: number, saved: EditableFields) {
-    const edits = rowEdits[rowId]
+  /**
+   * Promotes a still-preview corridor to a real saved row on first edit —
+   * seeded from the catalog's own reference data plus whatever the user has
+   * typed so far, so the new row's numbers exactly match what the preview
+   * row was already showing. `extra` covers edits that commit immediately
+   * rather than on blur (the funding-currency dropdown).
+   */
+  function promoteRow(
+    corridor: Corridor,
+    key: string,
+    extra: Partial<Omit<QuoteCorridorInput, 'corridorId'>> = {}
+  ) {
+    if (promotingCorridorIds.has(corridor.id)) return
+    const sentEdits = rowEdits[key]
+    const seed = seedQuoteCorridorFromCatalog(corridor)
+    const payload: QuoteCorridorInput = { corridorId: corridor.id, ...seed, ...sentEdits, ...extra }
+
+    setPromotingCorridorIds((prev) => new Set(prev).add(corridor.id))
+    addCorridor.mutate(payload, {
+      onSuccess: (created) => {
+        setPromotingCorridorIds((prev) => {
+          const next = new Set(prev)
+          next.delete(corridor.id)
+          return next
+        })
+        setRowEdits((prev) => {
+          const latest = prev[key]
+          const { [key]: _removed, ...rest } = prev
+          // Only carry edits made *after* we snapshotted the payload above —
+          // if nothing changed in the meantime, `latest` is still the same
+          // object we already sent, so there's nothing left to reconcile.
+          if (latest && latest !== sentEdits) {
+            return { ...rest, [String(created.id)]: latest }
+          }
+          return rest
+        })
+        setExpandedDetailRows((prev) => {
+          if (!prev.has(key)) return prev
+          const next = new Set(prev)
+          next.delete(key)
+          next.add(String(created.id))
+          return next
+        })
+      },
+      onError: () => {
+        setPromotingCorridorIds((prev) => {
+          const next = new Set(prev)
+          next.delete(corridor.id)
+          return next
+        })
+      },
+    })
+  }
+
+  function commitRow(item: DisplayRow) {
+    const edits = rowEdits[item.key]
     if (!edits || Object.keys(edits).length === 0) return
-    updateCorridor.mutate(
-      { corridorRowId: rowId, input: edits },
-      {
-        onSuccess: () => {
-          setRowEdits((prev) => {
-            const next = { ...prev }
-            delete next[rowId]
-            return next
-          })
-        },
-      }
-    )
-    void saved
+    if (item.kind === 'saved') {
+      updateCorridor.mutate(
+        { corridorRowId: item.row.id, input: edits },
+        {
+          onSuccess: () => {
+            setRowEdits((prev) => {
+              const next = { ...prev }
+              delete next[item.key]
+              return next
+            })
+          },
+        }
+      )
+    } else {
+      promoteRow(item.corridor, item.key)
+    }
+  }
+
+  function handleFundingCurrencyChange(item: DisplayRow, value: string) {
+    if (item.kind === 'saved') {
+      updateCorridor.mutate({ corridorRowId: item.row.id, input: { fundingCurrencyId: Number(value) } })
+    } else {
+      promoteRow(item.corridor, item.key, { fundingCurrencyId: Number(value) })
+    }
+  }
+
+  function handleRemoveOrDismiss(item: DisplayRow) {
+    if (item.kind === 'saved') {
+      const corridorId = item.row.corridorId
+      removeCorridor.mutate(item.row.id, {
+        onSuccess: () => setDismissedCorridorIds((prev) => new Set(prev).add(corridorId)),
+      })
+    } else {
+      setDismissedCorridorIds((prev) => new Set(prev).add(item.corridor.id))
+    }
   }
 
   function tiersFor(row: QuoteCorridor): CorridorTierInput[] {
     return (
-      tierDrafts[row.id] ??
+      tierDrafts[String(row.id)] ??
       (row.tiers ?? []).map((t) => ({
         tierNumber: t.tierNumber,
         yearlyVolumeUsd: t.yearlyVolumeUsd,
@@ -324,7 +461,7 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
   function setPricingModel(rowId: number, pricingModel: PricingModel) {
     updateCorridor.mutate({ corridorRowId: rowId, input: { pricingModel } })
     if (pricingModel === 'tiered') {
-      setExpandedTierRows((prev) => new Set(prev).add(rowId))
+      setExpandedTierRows((prev) => new Set(prev).add(String(rowId)))
     }
   }
 
@@ -337,7 +474,7 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
   ) {
     setTierDrafts((prev) => ({
       ...prev,
-      [rowId]: currentTiers.map((t) =>
+      [String(rowId)]: currentTiers.map((t) =>
         t.tierNumber === tierNumber ? { ...t, [field]: value } : t
       ),
     }))
@@ -349,14 +486,14 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
     if (nextNumber === undefined) return
     setTierDrafts((prev) => ({
       ...prev,
-      [rowId]: [...currentTiers, { tierNumber: nextNumber, ...EMPTY_TIER }],
+      [String(rowId)]: [...currentTiers, { tierNumber: nextNumber, ...EMPTY_TIER }],
     }))
   }
 
   function removeTier(rowId: number, currentTiers: CorridorTierInput[], tierNumber: number) {
     setTierDrafts((prev) => ({
       ...prev,
-      [rowId]: currentTiers.filter((t) => t.tierNumber !== tierNumber),
+      [String(rowId)]: currentTiers.filter((t) => t.tierNumber !== tierNumber),
     }))
   }
 
@@ -367,7 +504,7 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
         onSuccess: () => {
           setTierDrafts((prev) => {
             const next = { ...prev }
-            delete next[rowId]
+            delete next[String(rowId)]
             return next
           })
         },
@@ -375,13 +512,44 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
     )
   }
 
+  const previewRowCount = displayRows.filter((r) => r.kind === 'preview').length
+
   return (
     <div className="space-y-6">
-      <CollapsibleSection title="Priced Corridors">
-        {corridors.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No corridors added yet.</p>
-        ) : (
+      <CorridorsToOfferSection
+        tabKey={tabKey}
+        quote={data.quote}
+        restrictToUseCaseAllowedCountries={restrictToUseCaseAllowedCountries}
+      />
+
+      <CollapsibleSection
+        title="Priced Corridors"
+        actions={
+          previewRowCount > 0 ? (
+            <span className="text-xs text-primary-foreground/80">
+              {previewRowCount} previewing — not saved
+            </span>
+          ) : undefined
+        }
+      >
+        {matchesLoading ? (
+          <p role="status" className="mb-2 text-sm text-muted-foreground">Loading matching corridors…</p>
+        ) : matchesError ? (
+          <p role="alert" className="mb-2 text-sm text-destructive">Could not load matching corridors. Please try again.</p>
+        ) : matches?.length === 0 ? (
+          <p className="mb-2 text-sm text-muted-foreground">No catalog corridors match these filters. Any previously saved corridors are retained.</p>
+        ) : null}
+        {corridors.length > 0 && (
+          <p className="mb-2 text-xs text-muted-foreground">{corridors.length} previously saved corridors; {previewRowCount} additional matching previews. Filters do not remove saved work.</p>
+        )}
+        {displayRows.length > 0 && (
           <div className="overflow-x-auto">
+            {!matchesLoading && !matchesError && facets && (matches?.length ?? 0) < facets.totalMatched && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                Previewing the first {matches?.length ?? 0} of {facets.totalMatched} matching
+                corridors — narrow your filters to see the rest.
+              </p>
+            )}
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
@@ -410,45 +578,50 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                 </tr>
               </thead>
               <tbody>
-                {corridors.map((row) => {
-                  const saved: EditableFields = {
-                    atvUsd: row.atvUsd ?? 0,
-                    yearlyVolumeUsd: row.yearlyVolumeUsd,
-                    yearlyTransactions: row.yearlyTransactions,
-                    fixedFeeUsd: row.fixedFeeUsd,
-                    variableFeePct: row.variableFeePct,
-                    appliedFxSpread: row.appliedFxSpread,
-                    feeDiscountPct: row.feeDiscountPct ?? 0,
-                  }
+                {displayRows.map((item) => {
+                  const corridor = item.kind === 'saved' ? item.row.corridor : item.corridor
+                  const savedRow = item.kind === 'saved' ? item.row : null
+                  const isPreview = item.kind === 'preview'
+                  const isPromoting = item.kind === 'preview' && promotingCorridorIds.has(item.corridor.id)
+                  const saved: EditableFields =
+                    item.kind === 'saved'
+                      ? {
+                          atvUsd: item.row.atvUsd ?? 0,
+                          yearlyVolumeUsd: item.row.yearlyVolumeUsd,
+                          yearlyTransactions: item.row.yearlyTransactions,
+                          fixedFeeUsd: item.row.fixedFeeUsd,
+                          variableFeePct: item.row.variableFeePct,
+                          appliedFxSpread: item.row.appliedFxSpread,
+                          feeDiscountPct: item.row.feeDiscountPct ?? 0,
+                        }
+                      : previewFieldsFor(item.corridor)
                   const current: EditableFields = {
-                    atvUsd: fieldFor(row.id, saved, 'atvUsd'),
-                    yearlyVolumeUsd: fieldFor(row.id, saved, 'yearlyVolumeUsd'),
-                    yearlyTransactions: fieldFor(row.id, saved, 'yearlyTransactions'),
-                    fixedFeeUsd: fieldFor(row.id, saved, 'fixedFeeUsd'),
-                    variableFeePct: fieldFor(row.id, saved, 'variableFeePct'),
-                    appliedFxSpread: fieldFor(row.id, saved, 'appliedFxSpread'),
-                    feeDiscountPct: fieldFor(row.id, saved, 'feeDiscountPct'),
+                    atvUsd: fieldFor(item.key, saved, 'atvUsd'),
+                    yearlyVolumeUsd: fieldFor(item.key, saved, 'yearlyVolumeUsd'),
+                    yearlyTransactions: fieldFor(item.key, saved, 'yearlyTransactions'),
+                    fixedFeeUsd: fieldFor(item.key, saved, 'fixedFeeUsd'),
+                    variableFeePct: fieldFor(item.key, saved, 'variableFeePct'),
+                    appliedFxSpread: fieldFor(item.key, saved, 'appliedFxSpread'),
+                    feeDiscountPct: fieldFor(item.key, saved, 'feeDiscountPct'),
                   }
-                  const isTiered = row.pricingModel === 'tiered'
-                  const currentTiers = tiersFor(row)
-                  const preview: PricingSummary | null = !row.corridor
+                  const isTiered = savedRow?.pricingModel === 'tiered'
+                  const currentTiers = savedRow ? tiersFor(savedRow) : []
+                  const fundingCurrencyId = savedRow
+                    ? (savedRow.fundingCurrencyId ?? null)
+                    : (rowEdits[item.key]?.fundingCurrencyId ?? null)
+                  const previewSummary: PricingSummary | null = !corridor
                     ? null
                     : isTiered
                       ? previewTieredPricing(
                           current,
                           current.atvUsd,
                           currentTiers,
-                          row.corridor,
-                          row.fundingCurrencyId ?? null,
+                          corridor,
+                          fundingCurrencyId,
                           opportunityType
                         )
-                      : previewPricing(
-                          current,
-                          row.corridor,
-                          row.fundingCurrencyId ?? null,
-                          opportunityType
-                        )
-                  const isExpanded = expandedTierRows.has(row.id)
+                      : previewPricing(current, corridor, fundingCurrencyId, opportunityType)
+                  const isExpanded = expandedTierRows.has(item.key)
                   const tierVolumeTotal = currentTiers.reduce(
                     (sum, t) => sum + t.yearlyVolumeUsd,
                     0
@@ -458,15 +631,33 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                     current.yearlyVolumeUsd,
                     currentTiers
                   )
+                  const fundingCurrencyObj = savedRow
+                    ? savedRow.fundingCurrency
+                    : (currencies ?? []).find((c) => c.id === fundingCurrencyId)
 
                   return (
-                    <Fragment key={row.id}>
-                      <tr className="border-b last:border-0">
+                    <Fragment key={item.key}>
+                      <tr
+                        className={
+                          isPreview
+                            ? 'border-b bg-amber-50/70 last:border-0 dark:bg-amber-950/20'
+                            : 'border-b last:border-0'
+                        }
+                      >
                         <td className="py-2 pr-3 font-medium">
-                          <div>
-                            {row.corridor
-                              ? `${row.corridor.country?.name ?? row.corridor.countryId} · ${row.corridor.serviceCode} · ${row.corridor.transactionTypeCode} · ${row.corridor.payoutCurrency?.isoCode3 ?? ''}`
-                              : `#${row.corridorId}`}
+                          <div className="flex items-center gap-2">
+                            <span>
+                              {corridor
+                                ? corridorLabel(corridor)
+                                : savedRow
+                                  ? `#${savedRow.corridorId}`
+                                  : ''}
+                            </span>
+                            {isPreview && (
+                              <span className="shrink-0 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-100">
+                                Not saved
+                              </span>
+                            )}
                           </div>
                           <button
                             type="button"
@@ -474,55 +665,61 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                             onClick={() =>
                               setExpandedDetailRows((prev) => {
                                 const next = new Set(prev)
-                                if (next.has(row.id)) next.delete(row.id)
-                                else next.add(row.id)
+                                if (next.has(item.key)) next.delete(item.key)
+                                else next.add(item.key)
                                 return next
                               })
                             }
                           >
-                            {expandedDetailRows.has(row.id) ? 'Hide details' : 'Details'}
+                            {expandedDetailRows.has(item.key) ? 'Hide details' : 'Details'}
                           </button>
                         </td>
                         <td className="py-2 pr-3">
-                          <div className="flex items-center gap-1">
+                          {isPreview ? (
                             <div className="w-28">
                               <SimpleSelect
-                                value={row.pricingModel}
-                                onValueChange={(v) => setPricingModel(row.id, v as PricingModel)}
-                                options={[
-                                  { value: 'standard', label: 'Standard' },
-                                  { value: 'tiered', label: 'Tiered' },
-                                ]}
+                                value="standard"
+                                onValueChange={() => {}}
+                                options={[{ value: 'standard', label: 'Standard' }]}
+                                disabled
                               />
                             </div>
-                            {isTiered && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  setExpandedTierRows((prev) => {
-                                    const next = new Set(prev)
-                                    if (next.has(row.id)) next.delete(row.id)
-                                    else next.add(row.id)
-                                    return next
-                                  })
-                                }
-                              >
-                                {isExpanded ? 'Hide' : 'Edit'} tiers
-                              </Button>
-                            )}
-                          </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <div className="w-28">
+                                <SimpleSelect
+                                  value={savedRow!.pricingModel}
+                                  onValueChange={(v) => setPricingModel(savedRow!.id, v as PricingModel)}
+                                  options={[
+                                    { value: 'standard', label: 'Standard' },
+                                    { value: 'tiered', label: 'Tiered' },
+                                  ]}
+                                />
+                              </div>
+                              {isTiered && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setExpandedTierRows((prev) => {
+                                      const next = new Set(prev)
+                                      if (next.has(item.key)) next.delete(item.key)
+                                      else next.add(item.key)
+                                      return next
+                                    })
+                                  }
+                                >
+                                  {isExpanded ? 'Hide' : 'Edit'} tiers
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="py-2 pr-3">
                           <div className="w-24">
                             <SimpleSelect
-                              value={row.fundingCurrencyId ? String(row.fundingCurrencyId) : ''}
-                              onValueChange={(v) =>
-                                updateCorridor.mutate({
-                                  corridorRowId: row.id,
-                                  input: { fundingCurrencyId: Number(v) },
-                                })
-                              }
+                              value={fundingCurrencyId ? String(fundingCurrencyId) : ''}
+                              onValueChange={(v) => handleFundingCurrencyChange(item, v)}
                               options={(currencies ?? []).map((c) => ({
                                 value: String(c.id),
                                 label: c.isoCode3,
@@ -535,18 +732,18 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                           {data.quote.sourceCurrency?.isoCode3 ?? '—'}
                         </td>
                         <td className="py-2 pr-3 text-right text-muted-foreground">
-                          {row.corridor ? money(row.corridor.stdFixedFeeUsd) : '—'}
+                          {corridor ? money(corridor.stdFixedFeeUsd) : '—'}
                         </td>
                         <td className="py-2 pr-3 text-right text-muted-foreground">
-                          {row.corridor ? pct(row.corridor.stdVariableFeePct) : '—'}
+                          {corridor ? pct(corridor.stdVariableFeePct) : '—'}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           <Input
                             type="number"
                             value={current.atvUsd}
                             className="h-8 w-20"
-                            onChange={(e) => handleFieldChange(row.id, 'atvUsd', Number(e.target.value))}
-                            onBlur={() => commitRow(row.id, saved)}
+                            onChange={(e) => handleFieldChange(item.key, 'atvUsd', Number(e.target.value))}
+                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -555,9 +752,9 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                             value={current.yearlyVolumeUsd}
                             className="h-8 w-28"
                             onChange={(e) =>
-                              handleFieldChange(row.id, 'yearlyVolumeUsd', Number(e.target.value))
+                              handleFieldChange(item.key, 'yearlyVolumeUsd', Number(e.target.value))
                             }
-                            onBlur={() => commitRow(row.id, saved)}
+                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -567,12 +764,12 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                             className="h-8 w-24"
                             onChange={(e) =>
                               handleFieldChange(
-                                row.id,
+                                item.key,
                                 'yearlyTransactions',
                                 Number(e.target.value)
                               )
                             }
-                            onBlur={() => commitRow(row.id, saved)}
+                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -581,9 +778,9 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                             value={current.fixedFeeUsd}
                             className="h-8 w-20"
                             onChange={(e) =>
-                              handleFieldChange(row.id, 'fixedFeeUsd', Number(e.target.value))
+                              handleFieldChange(item.key, 'fixedFeeUsd', Number(e.target.value))
                             }
-                            onBlur={() => commitRow(row.id, saved)}
+                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -593,9 +790,9 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                             value={current.variableFeePct}
                             className="h-8 w-20"
                             onChange={(e) =>
-                              handleFieldChange(row.id, 'variableFeePct', Number(e.target.value))
+                              handleFieldChange(item.key, 'variableFeePct', Number(e.target.value))
                             }
-                            onBlur={() => commitRow(row.id, saved)}
+                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -605,9 +802,9 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                             value={current.feeDiscountPct}
                             className="h-8 w-20"
                             onChange={(e) =>
-                              handleFieldChange(row.id, 'feeDiscountPct', Number(e.target.value))
+                              handleFieldChange(item.key, 'feeDiscountPct', Number(e.target.value))
                             }
-                            onBlur={() => commitRow(row.id, saved)}
+                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -617,49 +814,53 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                             value={current.appliedFxSpread}
                             className="h-8 w-20"
                             onChange={(e) =>
-                              handleFieldChange(row.id, 'appliedFxSpread', Number(e.target.value))
+                              handleFieldChange(item.key, 'appliedFxSpread', Number(e.target.value))
                             }
-                            onBlur={() => commitRow(row.id, saved)}
+                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
-                          {preview ? money(preview.totalRevenue) : money(row.totalRevenue)}
+                          {previewSummary ? money(previewSummary.totalRevenue) : money(savedRow?.totalRevenue ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
-                          {preview ? pct(preview.fxMarginPct) : pct(row.fxMarginPct)}
+                          {previewSummary ? pct(previewSummary.fxMarginPct) : pct(savedRow?.fxMarginPct ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
-                          {preview ? money(preview.marginFee) : money(row.marginFee)}
+                          {previewSummary ? money(previewSummary.marginFee) : money(savedRow?.marginFee ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
-                          {preview ? pct(preview.marginFeePct) : pct(row.marginFeePct)}
+                          {previewSummary ? pct(previewSummary.marginFeePct) : pct(savedRow?.marginFeePct ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
-                          {preview ? pct(preview.marginPct) : pct(row.marginPct)}
+                          {previewSummary ? pct(previewSummary.marginPct) : pct(savedRow?.marginPct ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
-                          {preview ? pct(preview.grossMarginPct) : pct(row.grossMarginPct)}
+                          {previewSummary ? pct(previewSummary.grossMarginPct) : pct(savedRow?.grossMarginPct ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
-                          {preview ? pct(preview.takeRatePct) : pct(row.takeRatePct)}
+                          {previewSummary ? pct(previewSummary.takeRatePct) : pct(savedRow?.takeRatePct ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           <ApprovalCell
                             needsFinancial={
-                              preview ? preview.needsFinancialApproval : row.needsFinancialApproval
+                              previewSummary
+                                ? previewSummary.needsFinancialApproval
+                                : (savedRow?.needsFinancialApproval ?? false)
                             }
                             financialReasons={
-                              preview
-                                ? preview.financialApprovalReasons
-                                : (row.financialApprovalReasons ?? [])
+                              previewSummary
+                                ? previewSummary.financialApprovalReasons
+                                : (savedRow?.financialApprovalReasons ?? [])
                             }
                             needsNetwork={
-                              preview ? preview.needsNetworkApproval : row.needsNetworkApproval
+                              previewSummary
+                                ? previewSummary.needsNetworkApproval
+                                : (savedRow?.needsNetworkApproval ?? false)
                             }
                             networkReasons={
-                              preview
-                                ? preview.networkApprovalReasons
-                                : (row.networkApprovalReasons ?? [])
+                              previewSummary
+                                ? previewSummary.networkApprovalReasons
+                                : (savedRow?.networkApprovalReasons ?? [])
                             }
                           />
                         </td>
@@ -667,57 +868,54 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => removeCorridor.mutate(row.id)}
-                            disabled={removeCorridor.isPending}
+                            onClick={() => handleRemoveOrDismiss(item)}
+                            disabled={item.kind === 'saved' && removeCorridor.isPending}
                           >
-                            Remove
+                            {isPromoting ? 'Saving…' : item.kind === 'saved' ? 'Remove' : 'Dismiss'}
                           </Button>
                         </td>
                       </tr>
-                      {expandedDetailRows.has(row.id) && row.corridor && (
+                      {expandedDetailRows.has(item.key) && corridor && (
                         <tr className="border-b bg-muted/20 last:border-0">
                           <td colSpan={21} className="p-3">
                             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                               <PreviewStat
                                 label="Treasury FX Cost Spread %"
                                 value={pct(
-                                  row.corridor.treasuryFxCostSpread === null
+                                  corridor.treasuryFxCostSpread === null
                                     ? null
-                                    : row.corridor.treasuryFxCostSpread * 100
+                                    : corridor.treasuryFxCostSpread * 100
                                 )}
                               />
                               <PreviewStat
                                 label="Fixed Cost (USD)"
-                                value={money(row.corridor.costFixedUsd)}
+                                value={money(corridor.costFixedUsd)}
                               />
                               <PreviewStat
                                 label="Variable Cost %"
                                 value={pct(
-                                  row.corridor.costVariablePct === null
+                                  corridor.costVariablePct === null
                                     ? null
-                                    : row.corridor.costVariablePct * 100
+                                    : corridor.costVariablePct * 100
                                 )}
                               />
                               <PreviewStat
                                 label="Historical ATV"
                                 value={
-                                  row.corridor.historicalAtv === null
+                                  corridor.historicalAtv === null
                                     ? 'No data'
-                                    : money(row.corridor.historicalAtv)
+                                    : money(corridor.historicalAtv)
                                 }
                               />
                               <PreviewStat
-                                label={`Fixed Fee in ${row.fundingCurrency?.isoCode3 ?? 'funding currency'}`}
-                                value={feeInFundingCurrency(
-                                  current.fixedFeeUsd,
-                                  row.fundingCurrency
-                                )}
+                                label={`Fixed Fee in ${fundingCurrencyObj?.isoCode3 ?? 'funding currency'}`}
+                                value={feeInFundingCurrency(current.fixedFeeUsd, fundingCurrencyObj)}
                               />
                             </div>
                           </td>
                         </tr>
                       )}
-                      {isTiered && isExpanded && (
+                      {savedRow && isTiered && isExpanded && (
                         <tr className="border-b bg-muted/20 last:border-0">
                           <td colSpan={21} className="p-3">
                             <div className="space-y-3">
@@ -757,7 +955,7 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                                         value={tier.yearlyVolumeUsd}
                                         onChange={(e) =>
                                           updateTierField(
-                                            row.id,
+                                            savedRow.id,
                                             currentTiers,
                                             tier.tierNumber,
                                             'yearlyVolumeUsd',
@@ -772,7 +970,7 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                                         value={tier.fixedFeeUsd}
                                         onChange={(e) =>
                                           updateTierField(
-                                            row.id,
+                                            savedRow.id,
                                             currentTiers,
                                             tier.tierNumber,
                                             'fixedFeeUsd',
@@ -788,7 +986,7 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                                         value={tier.variableFeePct}
                                         onChange={(e) =>
                                           updateTierField(
-                                            row.id,
+                                            savedRow.id,
                                             currentTiers,
                                             tier.tierNumber,
                                             'variableFeePct',
@@ -804,7 +1002,7 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                                         value={tier.appliedFxSpread}
                                         onChange={(e) =>
                                           updateTierField(
-                                            row.id,
+                                            savedRow.id,
                                             currentTiers,
                                             tier.tierNumber,
                                             'appliedFxSpread',
@@ -817,7 +1015,7 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                                       variant="ghost"
                                       size="sm"
                                       onClick={() =>
-                                        removeTier(row.id, currentTiers, tier.tierNumber)
+                                        removeTier(savedRow.id, currentTiers, tier.tierNumber)
                                       }
                                     >
                                       Remove tier
@@ -833,14 +1031,14 @@ function PricingTabContent({ quoteId }: { quoteId: number }) {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => addTier(row.id, currentTiers)}
+                                  onClick={() => addTier(savedRow.id, currentTiers)}
                                   disabled={currentTiers.length >= 3}
                                 >
                                   Add tier
                                 </Button>
                                 <Button
                                   size="sm"
-                                  onClick={() => saveTiers(row.id, currentTiers)}
+                                  onClick={() => saveTiers(savedRow.id, currentTiers)}
                                   disabled={updateCorridor.isPending || allocationErrors.length > 0}
                                 >
                                   Save tiers

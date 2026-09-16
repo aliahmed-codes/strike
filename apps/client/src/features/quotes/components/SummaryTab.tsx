@@ -3,6 +3,7 @@ import type { FxModel, FxPricingOption, PricingStrategy, Quote, QuoteTotals } fr
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
+  useCorridorFacets,
   useCountries,
   useCurrencies,
   useIcpNodes,
@@ -15,7 +16,7 @@ import { CollapsibleSection } from './CollapsibleSection'
 import { FormField } from './FormField'
 import { MultiSelectDropdown } from './MultiSelectDropdown'
 import { SimpleSelect } from './SimpleSelect'
-import { CorridorsToOfferSection } from './CorridorsToOfferSection'
+import { CorridorsToOfferSection, useCorridorFilterFields } from './CorridorsToOfferSection'
 
 const OPPORTUNITY_TYPES = ['New partner', 'Pricing Change', 'Upsell']
 
@@ -100,6 +101,14 @@ export function SummaryTab({
   const restrictCorridorCountries = useCaseIds.some((id) => {
     const label = useCases?.find((u) => u.id === id)?.label.toLowerCase()
     return label ? restrictedUseCaseLabels.has(label) : false
+  })
+  // Same filter values `CorridorsToOfferSection` reads below — reused here
+  // only for the "N corridors match" note, so this hits the same react-query
+  // cache entry rather than issuing a second network request.
+  const { filters: corridorFilters } = useCorridorFilterFields(tabKey, quote)
+  const { data: corridorFacets } = useCorridorFacets({
+    ...corridorFilters,
+    restrictToUseCaseAllowedCountries: restrictCorridorCountries,
   })
   const [partnerCountryId, setPartnerCountryId] = useQuoteFormField(
     tabKey,
@@ -455,9 +464,16 @@ export function SummaryTab({
       </div>
 
       <CorridorsToOfferSection
+        tabKey={tabKey}
+        quote={quote}
         restrictToUseCaseAllowedCountries={restrictCorridorCountries}
-        fundingCurrencyCount={fundingCurrencyIds.length}
       />
+      {corridorFacets && (
+        <p className="-mt-4 text-xs text-muted-foreground">
+          {corridorFacets.totalMatched} corridor{corridorFacets.totalMatched === 1 ? '' : 's'} match
+          your filters — see them on the Pricing tab.
+        </p>
+      )}
 
       <CollapsibleSection title="Financial Summary">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

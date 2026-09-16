@@ -20,8 +20,10 @@ export const referenceKeys = {
   icpNodes: ['reference', 'icp-nodes'] as const,
   corridors: (filters?: Record<string, string | number>) =>
     ['reference', 'corridors', filters ?? {}] as const,
-  corridorFacets: (filters?: Record<string, string | number>) =>
-    ['reference', 'corridors', 'facets', filters ?? {}] as const,
+  corridorFacets: (filters: string) =>
+    ['reference', 'corridors', 'facets', filters] as const,
+  matchingCorridors: (filters: string) =>
+    ['reference', 'corridors', 'matching', filters] as const,
 }
 
 export function useRegions() {
@@ -91,26 +93,40 @@ export interface CorridorFacetFilters {
   restrictToUseCaseAllowedCountries?: boolean
 }
 
-function serializeFacetFilters(filters: CorridorFacetFilters): Record<string, string> {
-  const params: Record<string, string> = {}
-  if (filters.regionIds?.length) params.regionIds = filters.regionIds.join(',')
-  if (filters.countryIds?.length) params.countryIds = filters.countryIds.join(',')
-  if (filters.serviceCodes?.length) params.serviceCodes = filters.serviceCodes.join(',')
-  if (filters.transactionTypeCodes?.length)
-    params.transactionTypeCodes = filters.transactionTypeCodes.join(',')
-  if (filters.payoutCurrencyIds?.length) params.payoutCurrencyIds = filters.payoutCurrencyIds.join(',')
-  if (filters.payerCodes?.length) params.payerCodes = filters.payerCodes.join(',')
-  if (filters.hideUsdSwift) params.hideUsdSwift = 'true'
-  if (filters.restrictToUseCaseAllowedCountries) params.restrictToUseCaseAllowedCountries = 'true'
-  return params
+function serializeFacetFilters(filters: CorridorFacetFilters): string {
+  const params = new URLSearchParams()
+  for (const key of [
+    'regionIds',
+    'countryIds',
+    'serviceCodes',
+    'transactionTypeCodes',
+    'payoutCurrencyIds',
+    'payerCodes',
+  ] as const) {
+    for (const value of filters[key] ?? []) params.append(`${key}[]`, String(value))
+  }
+  if (filters.hideUsdSwift) params.set('hideUsdSwift', 'true')
+  if (filters.restrictToUseCaseAllowedCountries) params.set('restrictToUseCaseAllowedCountries', 'true')
+  return params.toString()
 }
 
 export function useCorridorFacets(filters: CorridorFacetFilters = {}) {
   const params = serializeFacetFilters(filters)
   return useQuery({
     queryKey: referenceKeys.corridorFacets(params),
-    queryFn: async () =>
-      (await apiClient.get<CorridorFacets>('/reference/corridors/facets', { params })).data,
-    placeholderData: (previous) => previous,
+    queryFn: async ({ signal }) =>
+      (await apiClient.get<CorridorFacets>(`/reference/corridors/facets?${params}`, { signal })).data,
+  })
+}
+
+/** Powers "Bulk Add by Filter" — the actual matching corridors (capped server-side), not just facet counts. */
+export function useMatchingCorridors(filters: CorridorFacetFilters, enabled: boolean) {
+  const params = serializeFacetFilters(filters)
+  return useQuery({
+    queryKey: referenceKeys.matchingCorridors(params),
+    queryFn: async ({ signal }) =>
+      (await apiClient.get<{ corridors: Corridor[] }>(`/reference/corridors/matching?${params}`, { signal }))
+        .data.corridors,
+    enabled,
   })
 }

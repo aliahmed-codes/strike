@@ -1,10 +1,92 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import type { CorridorFacetOption } from '@strike/shared'
+import type { Corridor, CorridorFacetOption, Quote } from '@strike/shared'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useCorridorFacets, type CorridorFacetFilters } from '../api/useReferenceData'
+import { useQuoteFormField } from '../hooks/useQuoteFormField'
 import { CollapsibleSection } from './CollapsibleSection'
+
+const EMPTY_NUMBER_ARRAY: number[] = []
+const EMPTY_STRING_ARRAY: string[] = []
+
+/**
+ * The 7 "Corridors to Offer" filter fields, buffered the same way every other
+ * quote field is (via `useQuoteFormField` — local until "Save Draft"). Reading
+ * this hook from both `CorridorsToOfferSection` (on Summary) and `PricingTab`
+ * (on Pricing) is what makes a filter change on one tab instantly reflected
+ * on the other — both read the same `pendingFields[tabKey]` slice.
+ */
+export function useCorridorFilterFields(tabKey: string, quote: Quote | undefined) {
+  const [regionIds, setRegionIds] = useQuoteFormField(
+    tabKey,
+    quote?.corridorFilterRegionIds,
+    'corridorFilterRegionIds',
+    EMPTY_NUMBER_ARRAY
+  )
+  const [countryIds, setCountryIds] = useQuoteFormField(
+    tabKey,
+    quote?.corridorFilterCountryIds,
+    'corridorFilterCountryIds',
+    EMPTY_NUMBER_ARRAY
+  )
+  const [serviceCodes, setServiceCodes] = useQuoteFormField(
+    tabKey,
+    quote?.corridorFilterServiceCodes,
+    'corridorFilterServiceCodes',
+    EMPTY_STRING_ARRAY
+  )
+  const [transactionTypeCodes, setTransactionTypeCodes] = useQuoteFormField(
+    tabKey,
+    quote?.corridorFilterTransactionTypeCodes,
+    'corridorFilterTransactionTypeCodes',
+    EMPTY_STRING_ARRAY
+  )
+  const [payoutCurrencyIds, setPayoutCurrencyIds] = useQuoteFormField(
+    tabKey,
+    quote?.corridorFilterPayoutCurrencyIds,
+    'corridorFilterPayoutCurrencyIds',
+    EMPTY_NUMBER_ARRAY
+  )
+  const [payerCodes, setPayerCodes] = useQuoteFormField(
+    tabKey,
+    quote?.corridorFilterPayerCodes,
+    'corridorFilterPayerCodes',
+    EMPTY_STRING_ARRAY
+  )
+  const [hideUsdSwift, setHideUsdSwift] = useQuoteFormField(
+    tabKey,
+    quote?.corridorFilterHideUsdSwift,
+    'corridorFilterHideUsdSwift',
+    false
+  )
+
+  const filters: Required<CorridorFacetFilters> = {
+    regionIds,
+    countryIds,
+    serviceCodes,
+    transactionTypeCodes,
+    payoutCurrencyIds,
+    payerCodes,
+    hideUsdSwift,
+    restrictToUseCaseAllowedCountries: false,
+  }
+
+  return {
+    filters,
+    setRegionIds,
+    setCountryIds,
+    setServiceCodes,
+    setTransactionTypeCodes,
+    setPayoutCurrencyIds,
+    setPayerCodes,
+    setHideUsdSwift,
+  }
+}
+
+export function corridorLabel(c: Corridor): string {
+  return `${c.country?.name ?? c.countryId} · ${c.serviceCode} · ${c.transactionTypeCode} · ${c.payoutCurrency?.isoCode3 ?? ''}`
+}
 
 function FacetPanel<T extends string | number>({
   title,
@@ -105,33 +187,39 @@ function FacetPanel<T extends string | number>({
   )
 }
 
-const EMPTY_FILTERS: Required<Omit<CorridorFacetFilters, 'hideUsdSwift' | 'restrictToUseCaseAllowedCountries'>> & {
-  hideUsdSwift: boolean
-} = {
-  regionIds: [],
-  countryIds: [],
-  serviceCodes: [],
-  transactionTypeCodes: [],
-  payoutCurrencyIds: [],
-  payerCodes: [],
-  hideUsdSwift: false,
-}
-
 function toggleValue<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
 }
 
+/**
+ * "Corridors to Offer" — the same facet-filter panel as the old app's, kept
+ * as pure local (buffered) filter state, not a picker that adds rows itself.
+ * Matching corridors show up live as preview rows on the Pricing tab — see
+ * `PricingTab.tsx`'s merge of saved + filter-matched rows. This section's
+ * only job is to let the user narrow that filter and see how many corridors
+ * it matches; it never calls the API to create anything.
+ */
 export function CorridorsToOfferSection({
+  tabKey,
+  quote,
   restrictToUseCaseAllowedCountries = false,
-  fundingCurrencyCount = 1,
 }: {
+  tabKey: string
+  quote: Quote | undefined
   restrictToUseCaseAllowedCountries?: boolean
-  /** Old app shows each corridor once per selected funding currency in this total — matching that display quirk exactly. */
-  fundingCurrencyCount?: number
 }) {
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
-  const { data: facets, isLoading } = useCorridorFacets({ ...filters, restrictToUseCaseAllowedCountries })
-  const multiplier = Math.max(1, fundingCurrencyCount)
+  const {
+    filters,
+    setRegionIds,
+    setCountryIds,
+    setServiceCodes,
+    setTransactionTypeCodes,
+    setPayoutCurrencyIds,
+    setPayerCodes,
+    setHideUsdSwift,
+  } = useCorridorFilterFields(tabKey, quote)
+  const filterParams = { ...filters, restrictToUseCaseAllowedCountries }
+  const { data: facets, isLoading, isError } = useCorridorFacets(filterParams)
 
   return (
     <CollapsibleSection
@@ -139,17 +227,19 @@ export function CorridorsToOfferSection({
       actions={
         !isLoading && facets ? (
           <span className="text-xs text-primary-foreground/80">
-            {facets.totalMatched * multiplier} of {facets.totalAvailable * multiplier} corridors match
+            {facets.totalMatched} of {facets.totalAvailable} corridors match
           </span>
         ) : undefined
       }
     >
       <p className="mb-3 text-xs text-muted-foreground">
-        Preview and filter the real corridor catalog here. Corridors are added with their pricing in the
-        Pricing tab.
+        Filter the real corridor catalog — matching corridors show up automatically as preview
+        rows on the Pricing tab. Edit a preview row there to save it.
       </p>
-      {isLoading || !facets ? (
-        <p className="text-sm text-muted-foreground">Loading corridor catalog…</p>
+      {isError ? (
+        <p role="alert" className="text-sm text-destructive">Could not load corridor counts. Please try again.</p>
+      ) : isLoading || !facets ? (
+        <p role="status" className="text-sm text-muted-foreground">Loading corridor catalog…</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <FacetPanel
@@ -157,35 +247,26 @@ export function CorridorsToOfferSection({
             options={facets.regions}
             selected={filters.regionIds}
             alwaysEnabled
-            onToggle={(value: number) =>
-              setFilters((f) => ({ ...f, regionIds: toggleValue(f.regionIds, value) }))
-            }
+            onToggle={(value: number) => setRegionIds(toggleValue(filters.regionIds, value))}
           />
           <FacetPanel
             title="Country"
             options={facets.countries}
             selected={filters.countryIds}
-            onToggle={(value: number) =>
-              setFilters((f) => ({ ...f, countryIds: toggleValue(f.countryIds, value) }))
-            }
+            onToggle={(value: number) => setCountryIds(toggleValue(filters.countryIds, value))}
           />
           <FacetPanel
             title="Service"
             options={facets.services}
             selected={filters.serviceCodes}
-            onToggle={(value: string) =>
-              setFilters((f) => ({ ...f, serviceCodes: toggleValue(f.serviceCodes, value) }))
-            }
+            onToggle={(value: string) => setServiceCodes(toggleValue(filters.serviceCodes, value))}
           />
           <FacetPanel
             title="Transaction Type"
             options={facets.transactionTypes}
             selected={filters.transactionTypeCodes}
             onToggle={(value: string) =>
-              setFilters((f) => ({
-                ...f,
-                transactionTypeCodes: toggleValue(f.transactionTypeCodes, value),
-              }))
+              setTransactionTypeCodes(toggleValue(filters.transactionTypeCodes, value))
             }
           />
           <FacetPanel
@@ -193,23 +274,19 @@ export function CorridorsToOfferSection({
             options={facets.payoutCurrencies}
             selected={filters.payoutCurrencyIds}
             onToggle={(value: number) =>
-              setFilters((f) => ({ ...f, payoutCurrencyIds: toggleValue(f.payoutCurrencyIds, value) }))
+              setPayoutCurrencyIds(toggleValue(filters.payoutCurrencyIds, value))
             }
           />
           <FacetPanel
             title="Payer"
             options={facets.payers}
             selected={filters.payerCodes}
-            onToggle={(value: string) =>
-              setFilters((f) => ({ ...f, payerCodes: toggleValue(f.payerCodes, value) }))
-            }
+            onToggle={(value: string) => setPayerCodes(toggleValue(filters.payerCodes, value))}
             extraHeader={
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Checkbox
                   checked={filters.hideUsdSwift}
-                  onCheckedChange={(checked) =>
-                    setFilters((f) => ({ ...f, hideUsdSwift: checked === true }))
-                  }
+                  onCheckedChange={(checked) => setHideUsdSwift(checked === true)}
                 />
                 Hide USD SWIFT
               </label>
