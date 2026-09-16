@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import {
   computeCorridorPricing,
   computeTieredCorridorPricing,
@@ -25,8 +26,16 @@ import { CollapsibleSection } from './CollapsibleSection'
 import { CorridorsToOfferSection, corridorLabel, useCorridorFilterFields } from './CorridorsToOfferSection'
 import { FormField } from './FormField'
 import { SimpleSelect } from './SimpleSelect'
+import { useCorridorEditsStore, type CorridorRowEdit } from '../store/useCorridorEditsStore'
 
 const RESTRICTED_USE_CASE_LABELS = new Set(['last mile payout', 'account top-up'])
+
+// A stable reference for "no pending edits on this tab" — returning a fresh
+// `{}` literal from the Zustand selector below instead would give
+// `useSyncExternalStore` a new object every render (even though nothing
+// changed), which it reads as "the store changed", triggering a re-render,
+// which asks the selector again, forever. See Phase A in FEATURES.md.
+const NO_ROW_EDITS: Record<string, CorridorRowEdit> = {}
 
 interface EditableFields {
   atvUsd: number
@@ -63,17 +72,6 @@ interface PricingSummary {
 type DisplayRow =
   | { kind: 'saved'; key: string; row: QuoteCorridor }
   | { kind: 'preview'; key: string; corridor: Corridor }
-
-const EMPTY_DRAFT: Omit<QuoteCorridorInput, 'corridorId'> = {
-  fundingCurrencyId: null,
-  atvUsd: undefined,
-  yearlyVolumeUsd: 0,
-  yearlyTransactions: 0,
-  fixedFeeUsd: 0,
-  variableFeePct: 0,
-  appliedFxSpread: 0,
-  feeDiscountPct: 0,
-}
 
 const EMPTY_TIER: Omit<CorridorTierInput, 'tierNumber'> = {
   yearlyVolumeUsd: 0,
@@ -259,13 +257,19 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   const updateCorridor = useUpdateQuoteCorridor(quoteId)
   const removeCorridor = useRemoveQuoteCorridor(quoteId)
 
-  const [selectedCorridorId, setSelectedCorridorId] = useState<number | null>(null)
-  const [draft, setDraft] = useState(EMPTY_DRAFT)
   // Per-row in-progress edits, keyed by a string row key — `String(id)` for a
   // saved row, `preview-${corridorId}` for one still only matched by filters
   // — holding only the fields touched since the row last loaded/saved/
-  // promoted. Cleared once the blur-triggered save (or promotion) succeeds.
-  const [rowEdits, setRowEdits] = useState<Record<string, Partial<EditableFields> & { fundingCurrencyId?: number | null }>>({})
+  // promoted. Lives in a persisted store (not component state) so it
+  // survives switching to the Summary tab and back, and is only cleared once
+  // the explicit "Save Edited Corridors" action actually succeeds for that
+  // row — never optimistically, so a failed save never loses the edit.
+  const rowEdits = useCorridorEditsStore((s) => s.edits[tabKey] ?? NO_ROW_EDITS)
+  const setRowField = useCorridorEditsStore((s) => s.setField)
+  const renameRowEditKey = useCorridorEditsStore((s) => s.renameRowKey)
+  const clearRowEdit = useCorridorEditsStore((s) => s.clearRow)
+  const [isSavingCorridors, setIsSavingCorridors] = useState(false)
+  const [saveCorridorsError, setSaveCorridorsError] = useState<string | null>(null)
   // Per-row in-progress tier edits — replaces the whole tier set for that
   // row until "Save Tiers" is clicked, then cleared so the saved data takes over.
   const [tierDrafts, setTierDrafts] = useState<Record<string, CorridorTierInput[]>>({})
@@ -310,138 +314,129 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
       corridor,
     })),
   ]
-  const availableCorridors = (corridorCatalog ?? []).filter((c) => !savedCorridorIds.has(c.id))
-  const selectedCorridor = availableCorridors.find((c) => c.id === selectedCorridorId) ?? null
-
-  const newCorridorPreview = selectedCorridor
-    ? previewPricing(
-        {
-          atvUsd: draft.atvUsd ?? 0,
-          yearlyVolumeUsd: draft.yearlyVolumeUsd,
-          yearlyTransactions: draft.yearlyTransactions,
-          fixedFeeUsd: draft.fixedFeeUsd,
-          variableFeePct: draft.variableFeePct,
-          appliedFxSpread: draft.appliedFxSpread,
-          feeDiscountPct: draft.feeDiscountPct ?? 0,
-        },
-        selectedCorridor,
-        draft.fundingCurrencyId ?? null,
-        opportunityType
-      )
-    : null
-
-  function handleAdd() {
-    if (selectedCorridorId === null) return
-    addCorridor.mutate(
-      { corridorId: selectedCorridorId, ...draft },
-      {
-        onSuccess: () => {
-          setSelectedCorridorId(null)
-          setDraft(EMPTY_DRAFT)
-        },
-      }
-    )
-  }
-
   function fieldFor(key: string, saved: EditableFields, field: keyof EditableFields): number {
     return rowEdits[key]?.[field] ?? saved[field]
   }
 
   function handleFieldChange(key: string, field: keyof EditableFields, value: number) {
-    setRowEdits((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }))
-  }
-
-  /**
-   * Promotes a still-preview corridor to a real saved row on first edit —
-   * seeded from the catalog's own reference data plus whatever the user has
-   * typed so far, so the new row's numbers exactly match what the preview
-   * row was already showing. `extra` covers edits that commit immediately
-   * rather than on blur (the funding-currency dropdown).
-   */
-  function promoteRow(
-    corridor: Corridor,
-    key: string,
-    extra: Partial<Omit<QuoteCorridorInput, 'corridorId'>> = {}
-  ) {
-    if (promotingCorridorIds.has(corridor.id)) return
-    const sentEdits = rowEdits[key]
-    const seed = seedQuoteCorridorFromCatalog(corridor)
-    const payload: QuoteCorridorInput = { corridorId: corridor.id, ...seed, ...sentEdits, ...extra }
-
-    setPromotingCorridorIds((prev) => new Set(prev).add(corridor.id))
-    addCorridor.mutate(payload, {
-      onSuccess: (created) => {
-        setPromotingCorridorIds((prev) => {
-          const next = new Set(prev)
-          next.delete(corridor.id)
-          return next
-        })
-        setRowEdits((prev) => {
-          const latest = prev[key]
-          const { [key]: _removed, ...rest } = prev
-          // Only carry edits made *after* we snapshotted the payload above —
-          // if nothing changed in the meantime, `latest` is still the same
-          // object we already sent, so there's nothing left to reconcile.
-          if (latest && latest !== sentEdits) {
-            return { ...rest, [String(created.id)]: latest }
-          }
-          return rest
-        })
-        setExpandedDetailRows((prev) => {
-          if (!prev.has(key)) return prev
-          const next = new Set(prev)
-          next.delete(key)
-          next.add(String(created.id))
-          return next
-        })
-      },
-      onError: () => {
-        setPromotingCorridorIds((prev) => {
-          const next = new Set(prev)
-          next.delete(corridor.id)
-          return next
-        })
-      },
-    })
-  }
-
-  function commitRow(item: DisplayRow) {
-    const edits = rowEdits[item.key]
-    if (!edits || Object.keys(edits).length === 0) return
-    if (item.kind === 'saved') {
-      updateCorridor.mutate(
-        { corridorRowId: item.row.id, input: edits },
-        {
-          onSuccess: () => {
-            setRowEdits((prev) => {
-              const next = { ...prev }
-              delete next[item.key]
-              return next
-            })
-          },
-        }
-      )
-    } else {
-      promoteRow(item.corridor, item.key)
-    }
+    setRowField(tabKey, key, field, value)
   }
 
   function handleFundingCurrencyChange(item: DisplayRow, value: string) {
-    if (item.kind === 'saved') {
-      updateCorridor.mutate({ corridorRowId: item.row.id, input: { fundingCurrencyId: Number(value) } })
-    } else {
-      promoteRow(item.corridor, item.key, { fundingCurrencyId: Number(value) })
+    setRowField(tabKey, item.key, 'fundingCurrencyId', value ? Number(value) : null)
+  }
+
+  /**
+   * Promotes a still-preview corridor to a real saved row — seeded from the
+   * catalog's own reference data plus whatever the user staged, so the new
+   * row's numbers exactly match what the preview row was already showing.
+   * Only called from the explicit "Save Edited Corridors" action, never on
+   * blur — see FEATURES.md Phase A.
+   */
+  async function promoteRow(corridor: Corridor, key: string): Promise<void> {
+    if (promotingCorridorIds.has(corridor.id)) return
+    const sentEdits = useCorridorEditsStore.getState().edits[tabKey]?.[key]
+    const seed = seedQuoteCorridorFromCatalog(corridor)
+    const payload: QuoteCorridorInput = { corridorId: corridor.id, ...seed, ...sentEdits }
+
+    setPromotingCorridorIds((prev) => new Set(prev).add(corridor.id))
+    try {
+      const created = await addCorridor.mutateAsync(payload)
+      const latest = useCorridorEditsStore.getState().edits[tabKey]?.[key]
+      // Only carry edits made *after* we snapshotted the payload above — if
+      // nothing changed in the meantime, `latest` is still the same object
+      // we already sent, so there's nothing left to reconcile.
+      if (latest === sentEdits) {
+        clearRowEdit(tabKey, key)
+      } else if (latest) {
+        renameRowEditKey(tabKey, key, String(created.id))
+      }
+      setExpandedDetailRows((prev) => {
+        if (!prev.has(key)) return prev
+        const next = new Set(prev)
+        next.delete(key)
+        next.add(String(created.id))
+        return next
+      })
+    } finally {
+      setPromotingCorridorIds((prev) => {
+        const next = new Set(prev)
+        next.delete(corridor.id)
+        return next
+      })
     }
+  }
+
+  /** Saved row: PATCHes only if the edits sent are still the latest ones — if the user typed more while this was in flight, leave it dirty for the next Save click rather than trying to merge partial diffs. */
+  async function saveRow(rowId: number, key: string): Promise<void> {
+    const edits = useCorridorEditsStore.getState().edits[tabKey]?.[key]
+    if (!edits || Object.keys(edits).length === 0) return
+    await updateCorridor.mutateAsync({ corridorRowId: rowId, input: edits })
+    const latest = useCorridorEditsStore.getState().edits[tabKey]?.[key]
+    if (latest === edits) clearRowEdit(tabKey, key)
+  }
+
+  function labelForRowKey(key: string): string {
+    if (key.startsWith('preview-')) {
+      const corridorId = Number(key.slice('preview-'.length))
+      const corridor = (corridorCatalog ?? []).find((c) => c.id === corridorId)
+      return corridor ? corridorLabel(corridor) : `Corridor #${corridorId}`
+    }
+    const row = corridors.find((r) => String(r.id) === key)
+    return row?.corridor ? corridorLabel(row.corridor) : `Row ${key}`
+  }
+
+  const dirtyRowKeys = Object.keys(rowEdits).filter((key) => Object.keys(rowEdits[key] ?? {}).length > 0)
+
+  /**
+   * The one explicit save action for every staged corridor edit — new-row
+   * promotions and existing-row updates alike. Saves each dirty row
+   * independently: a failure on one row never blocks or discards the
+   * others, and a row whose save fails stays staged (still marked unsaved)
+   * so nothing the user typed is lost. Matches the old app's single "Save
+   * Edited Corridors" button, minus its data-loss-on-failure bug (see
+   * docs/old-app-reference/pricing-tab-corridor-editing.md §1).
+   */
+  async function handleSaveEditedCorridors() {
+    setIsSavingCorridors(true)
+    setSaveCorridorsError(null)
+    const failedLabels: string[] = []
+
+    for (const key of dirtyRowKeys) {
+      try {
+        if (key.startsWith('preview-')) {
+          const corridorId = Number(key.slice('preview-'.length))
+          const corridor = (corridorCatalog ?? []).find((c) => c.id === corridorId)
+          if (!corridor) continue
+          await promoteRow(corridor, key)
+        } else {
+          await saveRow(Number(key), key)
+        }
+      } catch {
+        failedLabels.push(labelForRowKey(key))
+      }
+    }
+
+    setIsSavingCorridors(false)
+    setSaveCorridorsError(
+      failedLabels.length > 0
+        ? `Couldn't save ${failedLabels.length} corridor${failedLabels.length > 1 ? 's' : ''}: ${failedLabels.join(', ')}. Your edits are still here — check your connection and try again.`
+        : null
+    )
   }
 
   function handleRemoveOrDismiss(item: DisplayRow) {
     if (item.kind === 'saved') {
       const corridorId = item.row.corridorId
       removeCorridor.mutate(item.row.id, {
-        onSuccess: () => setDismissedCorridorIds((prev) => new Set(prev).add(corridorId)),
+        onSuccess: () => {
+          setDismissedCorridorIds((prev) => new Set(prev).add(corridorId))
+          clearRowEdit(tabKey, item.key)
+        },
       })
     } else {
       setDismissedCorridorIds((prev) => new Set(prev).add(item.corridor.id))
+      clearRowEdit(tabKey, item.key)
     }
   }
 
@@ -520,18 +515,36 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
         tabKey={tabKey}
         quote={data.quote}
         restrictToUseCaseAllowedCountries={restrictToUseCaseAllowedCountries}
+        defaultOpen={false}
       />
 
       <CollapsibleSection
         title="Priced Corridors"
         actions={
-          previewRowCount > 0 ? (
-            <span className="text-xs text-primary-foreground/80">
-              {previewRowCount} previewing — not saved
-            </span>
-          ) : undefined
+          <div className="flex items-center gap-3">
+            {previewRowCount > 0 && (
+              <span className="text-xs text-primary-foreground/80">
+                {previewRowCount} previewing — not saved
+              </span>
+            )}
+            <Button
+              size="sm"
+              onClick={handleSaveEditedCorridors}
+              disabled={dirtyRowKeys.length === 0 || isSavingCorridors}
+            >
+              {isSavingCorridors
+                ? 'Saving…'
+                : `Save Edited Corridors${dirtyRowKeys.length > 0 ? ` (${dirtyRowKeys.length})` : ''}`}
+            </Button>
+          </div>
         }
       >
+        {saveCorridorsError && (
+          <div className="mb-2 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            <span>{saveCorridorsError}</span>
+          </div>
+        )}
         {matchesLoading ? (
           <p role="status" className="mb-2 text-sm text-muted-foreground">Loading matching corridors…</p>
         ) : matchesError ? (
@@ -606,9 +619,16 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                   }
                   const isTiered = savedRow?.pricingModel === 'tiered'
                   const currentTiers = savedRow ? tiersFor(savedRow) : []
-                  const fundingCurrencyId = savedRow
-                    ? (savedRow.fundingCurrencyId ?? null)
-                    : (rowEdits[item.key]?.fundingCurrencyId ?? null)
+                  // A pending funding-currency edit (staged, not yet saved) takes
+                  // priority over the saved value for both row kinds — checked with
+                  // `in` (not `??`) so explicitly clearing the dropdown to "—"
+                  // (a staged `null`) isn't mistaken for "no pending edit". See Phase A.
+                  const pendingEdit = rowEdits[item.key]
+                  const fundingCurrencyId =
+                    pendingEdit && 'fundingCurrencyId' in pendingEdit
+                      ? pendingEdit.fundingCurrencyId!
+                      : (savedRow?.fundingCurrencyId ?? null)
+                  const isDirty = Object.keys(pendingEdit ?? {}).length > 0
                   const previewSummary: PricingSummary | null = !corridor
                     ? null
                     : isTiered
@@ -641,7 +661,9 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                         className={
                           isPreview
                             ? 'border-b bg-amber-50/70 last:border-0 dark:bg-amber-950/20'
-                            : 'border-b last:border-0'
+                            : isDirty
+                              ? 'border-b bg-blue-50/70 last:border-0 dark:bg-blue-950/20'
+                              : 'border-b last:border-0'
                         }
                       >
                         <td className="py-2 pr-3 font-medium">
@@ -656,6 +678,11 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             {isPreview && (
                               <span className="shrink-0 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-100">
                                 Not saved
+                              </span>
+                            )}
+                            {!isPreview && isDirty && (
+                              <span className="shrink-0 rounded bg-blue-200 px-1.5 py-0.5 text-[10px] font-semibold text-blue-900 dark:bg-blue-900 dark:text-blue-100">
+                                Unsaved changes
                               </span>
                             )}
                           </div>
@@ -743,7 +770,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             value={current.atvUsd}
                             className="h-8 w-20"
                             onChange={(e) => handleFieldChange(item.key, 'atvUsd', Number(e.target.value))}
-                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -754,7 +780,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             onChange={(e) =>
                               handleFieldChange(item.key, 'yearlyVolumeUsd', Number(e.target.value))
                             }
-                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -769,7 +794,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                                 Number(e.target.value)
                               )
                             }
-                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -780,7 +804,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             onChange={(e) =>
                               handleFieldChange(item.key, 'fixedFeeUsd', Number(e.target.value))
                             }
-                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -792,7 +815,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             onChange={(e) =>
                               handleFieldChange(item.key, 'variableFeePct', Number(e.target.value))
                             }
-                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -804,7 +826,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             onChange={(e) =>
                               handleFieldChange(item.key, 'feeDiscountPct', Number(e.target.value))
                             }
-                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -816,7 +837,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             onChange={(e) =>
                               handleFieldChange(item.key, 'appliedFxSpread', Number(e.target.value))
                             }
-                            onBlur={() => commitRow(item)}
                           />
                         </td>
                         <td className="py-2 pr-3 text-right">
@@ -1055,125 +1075,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
             </table>
           </div>
         )}
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Add a Corridor">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <FormField label="Corridor" required>
-            <SimpleSelect
-              value={selectedCorridorId ? String(selectedCorridorId) : ''}
-              onValueChange={(v) => setSelectedCorridorId(Number(v))}
-              options={availableCorridors.map((c) => ({
-                value: String(c.id),
-                label: `${c.country?.name ?? c.countryId} · ${c.serviceCode} · ${c.transactionTypeCode} · ${c.payoutCurrency?.isoCode3 ?? ''}`,
-              }))}
-              placeholder="Select a corridor…"
-            />
-          </FormField>
-          <FormField label="Funding Currency">
-            <SimpleSelect
-              value={draft.fundingCurrencyId ? String(draft.fundingCurrencyId) : ''}
-              onValueChange={(v) => setDraft((d) => ({ ...d, fundingCurrencyId: Number(v) }))}
-              options={(currencies ?? []).map((c) => ({ value: String(c.id), label: c.isoCode3 }))}
-            />
-          </FormField>
-          <FormField label="Yearly Volume (USD)">
-            <Input
-              type="number"
-              value={draft.yearlyVolumeUsd}
-              onChange={(e) => setDraft((d) => ({ ...d, yearlyVolumeUsd: Number(e.target.value) }))}
-            />
-          </FormField>
-          <FormField label="Yearly Transactions">
-            <Input
-              type="number"
-              value={draft.yearlyTransactions}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, yearlyTransactions: Number(e.target.value) }))
-              }
-            />
-          </FormField>
-          <FormField label="Fixed Fee (USD)">
-            <Input
-              type="number"
-              value={draft.fixedFeeUsd}
-              onChange={(e) => setDraft((d) => ({ ...d, fixedFeeUsd: Number(e.target.value) }))}
-            />
-          </FormField>
-          <FormField label="Variable Fee %">
-            <Input
-              type="number"
-              step="0.01"
-              value={draft.variableFeePct}
-              onChange={(e) => setDraft((d) => ({ ...d, variableFeePct: Number(e.target.value) }))}
-            />
-          </FormField>
-          <FormField label="Applied FX Spread %">
-            <Input
-              type="number"
-              step="0.01"
-              value={draft.appliedFxSpread}
-              onChange={(e) => setDraft((d) => ({ ...d, appliedFxSpread: Number(e.target.value) }))}
-            />
-          </FormField>
-          <FormField label="Fee Discount %">
-            <Input
-              type="number"
-              step="0.01"
-              value={draft.feeDiscountPct}
-              onChange={(e) => setDraft((d) => ({ ...d, feeDiscountPct: Number(e.target.value) }))}
-            />
-          </FormField>
-        </div>
-
-        {selectedCorridor && (
-          <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-3 lg:grid-cols-4">
-            <PreviewStat
-              label="Std Fixed Fee (catalog)"
-              value={money(selectedCorridor.stdFixedFeeUsd)}
-            />
-            <PreviewStat
-              label="Std Variable Fee % (catalog)"
-              value={pct(selectedCorridor.stdVariableFeePct)}
-            />
-            <PreviewStat
-              label="Historical ATV"
-              value={
-                selectedCorridor.historicalAtv === null
-                  ? 'No data'
-                  : money(selectedCorridor.historicalAtv)
-              }
-            />
-          </div>
-        )}
-
-        {selectedCorridor && newCorridorPreview && (
-          <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-3 lg:grid-cols-6">
-            <PreviewStat label="Revenue" value={money(newCorridorPreview.totalRevenue)} />
-            <PreviewStat label="FX Margin %" value={pct(newCorridorPreview.fxMarginPct)} />
-            <PreviewStat label="Margin Fee" value={money(newCorridorPreview.marginFee)} />
-            <PreviewStat label="Margin %" value={pct(newCorridorPreview.marginPct)} />
-            <PreviewStat label="Gross Margin %" value={pct(newCorridorPreview.grossMarginPct)} />
-            <PreviewStat label="Take Rate" value={pct(newCorridorPreview.takeRatePct)} />
-            <div className="flex flex-col justify-center">
-              <span className="text-xs text-muted-foreground uppercase">Approval</span>
-              <ApprovalCell
-                needsFinancial={newCorridorPreview.needsFinancialApproval}
-                financialReasons={newCorridorPreview.financialApprovalReasons}
-                needsNetwork={newCorridorPreview.needsNetworkApproval}
-                networkReasons={newCorridorPreview.networkApprovalReasons}
-              />
-            </div>
-          </div>
-        )}
-
-        <Button
-          className="mt-4"
-          onClick={handleAdd}
-          disabled={selectedCorridorId === null || addCorridor.isPending}
-        >
-          {addCorridor.isPending ? 'Adding…' : 'Add Corridor'}
-        </Button>
       </CollapsibleSection>
     </div>
   )

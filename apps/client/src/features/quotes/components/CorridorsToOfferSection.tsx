@@ -203,10 +203,12 @@ export function CorridorsToOfferSection({
   tabKey,
   quote,
   restrictToUseCaseAllowedCountries = false,
+  defaultOpen = true,
 }: {
   tabKey: string
   quote: Quote | undefined
   restrictToUseCaseAllowedCountries?: boolean
+  defaultOpen?: boolean
 }) {
   const {
     filters,
@@ -224,6 +226,7 @@ export function CorridorsToOfferSection({
   return (
     <CollapsibleSection
       title="Corridors to Offer"
+      defaultOpen={defaultOpen}
       actions={
         !isLoading && facets ? (
           <span className="text-xs text-primary-foreground/80">
