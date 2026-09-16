@@ -55,7 +55,55 @@ const quoteFields = {
     .positive()
     .exists({ table: 'currencies', column: 'id' })
     .optional(),
+  // "Corridors to Offer" facet-filter selection. Service/Transaction Type/
+  // Payer have no master reference table (same as the old app's own
+  // modeling), so those 3 are validated for shape only — an unknown code
+  // simply matches zero corridors, harmlessly.
+  corridorFilterRegionIds: vine
+    .array(vine.number().positive().exists({ table: 'regions', column: 'id' }))
+    .maxLength(50)
+    .optional(),
+  corridorFilterCountryIds: vine
+    .array(vine.number().positive().exists({ table: 'countries', column: 'id' }))
+    .maxLength(300)
+    .optional(),
+  corridorFilterServiceCodes: vine
+    .array(vine.string().trim().maxLength(120))
+    .maxLength(50)
+    .optional(),
+  corridorFilterTransactionTypeCodes: vine
+    .array(vine.string().trim().maxLength(120))
+    .maxLength(50)
+    .optional(),
+  corridorFilterPayoutCurrencyIds: vine
+    .array(vine.number().positive().exists({ table: 'currencies', column: 'id' }))
+    .maxLength(300)
+    .optional(),
+  corridorFilterPayerCodes: vine
+    .array(vine.string().trim().maxLength(200))
+    .maxLength(500)
+    .optional(),
+  corridorFilterHideUsdSwift: vine.boolean().optional(),
 }
+
+export const corridorFacetFiltersValidator = vine.compile(
+  vine.object({
+    regionIds: vine.array(vine.number().positive().withoutDecimals()).maxLength(50).optional(),
+    countryIds: vine.array(vine.number().positive().withoutDecimals()).maxLength(300).optional(),
+    serviceCodes: vine.array(vine.string().minLength(1).maxLength(120)).maxLength(50).optional(),
+    transactionTypeCodes: vine
+      .array(vine.string().minLength(1).maxLength(120))
+      .maxLength(50)
+      .optional(),
+    payoutCurrencyIds: vine
+      .array(vine.number().positive().withoutDecimals())
+      .maxLength(300)
+      .optional(),
+    payerCodes: vine.array(vine.string().minLength(1).maxLength(200)).maxLength(500).optional(),
+    hideUsdSwift: vine.boolean().optional(),
+    restrictToUseCaseAllowedCountries: vine.boolean().optional(),
+  })
+)
 
 export const createQuoteValidator = vine.compile(
   vine.object({

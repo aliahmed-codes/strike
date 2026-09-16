@@ -205,6 +205,28 @@ async function regionFacet(filters: CorridorFacetFilters): Promise<FacetOption[]
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
 }
 
+/**
+ * A hard cap on how many corridors a single filter selection can list/add at
+ * once — the old app has no equivalent guard at all (ticking one big country
+ * instantly renders/would-add every matching corridor, unbounded). Matching
+ * this old-app data model without this cap would just reproduce that risk.
+ */
+export const MAX_MATCHING_CORRIDORS = 200
+
+/**
+ * The actual corridor ids matching the current filters (not just a count) —
+ * powers "Bulk Add by Filter". Capped at MAX_MATCHING_CORRIDORS; the caller
+ * is expected to also show `totalMatched` (from computeCorridorFacets) so
+ * the UI can warn when the true match count exceeds what's listed.
+ */
+export async function listMatchingCorridorIds(filters: CorridorFacetFilters): Promise<number[]> {
+  const rows = (await narrowedQuery(filters)
+    .select('corridors.id')
+    .orderBy('corridors.id')
+    .limit(MAX_MATCHING_CORRIDORS)) as unknown as { id: number }[]
+  return rows.map((r) => r.id)
+}
+
 export async function computeCorridorFacets(
   filters: CorridorFacetFilters
 ): Promise<CorridorFacets> {

@@ -48,6 +48,10 @@ export default class QuotesController {
     const { columns, pivots } = splitPivotFields(payload)
 
     const quote = await Quote.create({ ...columns, ownerId: user.id, status: 'draft' })
+    // Columns omitted from the payload (e.g. the corridor filter arrays) are
+    // never assigned in-memory, so the model instance from `create()` doesn't
+    // reflect their DB-level defaults until we re-fetch the row.
+    await quote.refresh()
     await syncPivots(quote, pivots)
 
     await quote.load('useCases')

@@ -122,6 +122,33 @@ export default class Quote extends BaseModel {
   @belongsTo(() => Currency, { foreignKey: 'defaultFeeCurrencyId' })
   declare defaultFeeCurrency: BelongsTo<typeof Currency>
 
+  // "Corridors to Offer" facet-filter selection — drives both the Summary
+  // tab's filter panels and the Pricing tab's live preview rows from the
+  // same saved state. Plain jsonb arrays, not join tables: Service/
+  // Transaction Type/Payer have no master reference table of their own
+  // (same as the old app's own modeling), so a join-table-per-dimension
+  // approach would be ceremony for 3 of the 6 dimensions.
+  @column({ prepare: (value: number[]) => JSON.stringify(value ?? []) })
+  declare corridorFilterRegionIds: number[]
+
+  @column({ prepare: (value: number[]) => JSON.stringify(value ?? []) })
+  declare corridorFilterCountryIds: number[]
+
+  @column({ prepare: (value: string[]) => JSON.stringify(value ?? []) })
+  declare corridorFilterServiceCodes: string[]
+
+  @column({ prepare: (value: string[]) => JSON.stringify(value ?? []) })
+  declare corridorFilterTransactionTypeCodes: string[]
+
+  @column({ prepare: (value: number[]) => JSON.stringify(value ?? []) })
+  declare corridorFilterPayoutCurrencyIds: number[]
+
+  @column({ prepare: (value: string[]) => JSON.stringify(value ?? []) })
+  declare corridorFilterPayerCodes: string[]
+
+  @column()
+  declare corridorFilterHideUsdSwift: boolean
+
   @hasMany(() => QuoteCorridor)
   declare corridors: HasMany<typeof QuoteCorridor>
 

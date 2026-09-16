@@ -6,7 +6,42 @@ import UseCase from '#models/use_case'
 import IntegrationType from '#models/integration_type'
 import IcpNode from '#models/icp_node'
 import Corridor from '#models/corridor'
-import { computeCorridorFacets } from '#services/corridor_facet_service'
+import { corridorFacetFiltersValidator } from '#validators/quote'
+import {
+  computeCorridorFacets,
+  listMatchingCorridorIds,
+  type CorridorFacetFilters,
+} from '#services/corridor_facet_service'
+
+function toFilterList(value: unknown): unknown {
+  if (typeof value === 'string') return value.length > 0 ? value.split(',') : undefined
+  return value
+}
+
+async function parseFacetFilters(qs: Record<string, unknown>): Promise<CorridorFacetFilters> {
+  const {
+    regionIds,
+    countryIds,
+    serviceCodes,
+    transactionTypeCodes,
+    payoutCurrencyIds,
+    payerCodes,
+    hideUsdSwift,
+    restrictToUseCaseAllowedCountries,
+  } = qs
+
+  return corridorFacetFiltersValidator.validate({
+    regionIds: toFilterList(regionIds),
+    countryIds: toFilterList(countryIds),
+    serviceCodes: toFilterList(serviceCodes),
+    transactionTypeCodes: toFilterList(transactionTypeCodes),
+    payoutCurrencyIds: toFilterList(payoutCurrencyIds),
+    payerCodes: toFilterList(payerCodes),
+    hideUsdSwift: hideUsdSwift === '' ? undefined : hideUsdSwift,
+    restrictToUseCaseAllowedCountries:
+      restrictToUseCaseAllowedCountries === '' ? undefined : restrictToUseCaseAllowedCountries,
+  })
+}
 
 export default class ReferenceDataController {
   async regions() {
@@ -46,36 +81,27 @@ export default class ReferenceDataController {
   }
 
   async corridorFacets({ request }: HttpContext) {
-    const {
-      regionIds,
-      countryIds,
-      serviceCodes,
-      transactionTypeCodes,
-      payoutCurrencyIds,
-      payerCodes,
-      hideUsdSwift,
-      restrictToUseCaseAllowedCountries,
-    } = request.qs()
+    return computeCorridorFacets(await parseFacetFilters(request.qs()))
+  }
 
-    const toNumberList = (value: unknown) =>
-      typeof value === 'string' && value.length > 0
-        ? value
-            .split(',')
-            .map(Number)
-            .filter((n) => !Number.isNaN(n))
-        : undefined
-    const toStringList = (value: unknown) =>
-      typeof value === 'string' && value.length > 0 ? value.split(',') : undefined
-
-    return computeCorridorFacets({
-      regionIds: toNumberList(regionIds),
-      countryIds: toNumberList(countryIds),
-      serviceCodes: toStringList(serviceCodes),
-      transactionTypeCodes: toStringList(transactionTypeCodes),
-      payoutCurrencyIds: toNumberList(payoutCurrencyIds),
-      payerCodes: toStringList(payerCodes),
-      hideUsdSwift: hideUsdSwift === 'true',
-      restrictToUseCaseAllowedCountries: restrictToUseCaseAllowedCountries === 'true',
-    })
+  /**
+   * Powers "Bulk Add by Filter" — the actual list of individual corridors
+   * matching the current facet filters (not just counts), so the user can
+   * pick specific ones (or "select all") to add in one action. See
+   * FEATURES.md's Bulk Add by Filter scope for why this exists instead of
+   * copying the old app's filter-is-the-data model.
+   */
+  async matchingCorridors({ request }: HttpContext) {
+    const filters = await parseFacetFilters(request.qs())
+    const ids = await listMatchingCorridorIds(filters)
+    if (ids.length === 0) {
+      return { corridors: [] }
+    }
+    const corridors = await Corridor.query()
+      .whereIn('id', ids)
+      .preload('country')
+      .preload('payoutCurrency')
+      .orderBy('id')
+    return { corridors }
   }
 }

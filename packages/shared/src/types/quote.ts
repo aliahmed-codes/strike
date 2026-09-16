@@ -168,6 +168,14 @@ export interface QuoteFields {
   sourceCurrencyId?: number | null
   sourceCurrencyIds?: number[]
   defaultFeeCurrencyId?: number | null
+  /** "Corridors to Offer" facet-filter selection — drives live preview rows on the Pricing tab. */
+  corridorFilterRegionIds?: number[]
+  corridorFilterCountryIds?: number[]
+  corridorFilterServiceCodes?: string[]
+  corridorFilterTransactionTypeCodes?: string[]
+  corridorFilterPayoutCurrencyIds?: number[]
+  corridorFilterPayerCodes?: string[]
+  corridorFilterHideUsdSwift?: boolean
 }
 
 export interface Quote extends QuoteFields {

@@ -256,3 +256,213 @@ test.group('Corridor facets', () => {
     assert.notInclude(countryValues, disallowedCountry.id)
   })
 })
+
+test.group('Corridor multi-select filter transport', () => {
+  for (const dimension of [
+    'regionIds',
+    'countryIds',
+    'serviceCodes',
+    'transactionTypeCodes',
+    'payoutCurrencyIds',
+    'payerCodes',
+  ] as const) {
+    test(`honors comma-separated ${dimension} on both endpoints`, async ({ client, assert }) => {
+      const token = await createUserWithToken()
+      const { region1, country1, corridor1, corridor2 } = await seedTwoCorridorsInDifferentRegions()
+      const otherCurrency = await Currency.create({
+        isoCode3: 'OTH',
+        name: 'Other Currency',
+        decimalPlaces: 2,
+        isSource: false,
+        isFunding: false,
+        isPayout: true,
+        isFee: false,
+        isHard: false,
+        isPegged: false,
+      })
+      await corridor2.merge({ payoutCurrencyId: otherCurrency.id }).save()
+      const values = {
+        regionIds: `${region1.id},99999999`,
+        countryIds: `${country1.id},99999999`,
+        serviceCodes: 'bank_account,missing_service',
+        transactionTypeCodes: 'b2b,missing_type',
+        payoutCurrencyIds: `${corridor1.payoutCurrencyId},99999999`,
+        payerCodes: 'payer_a,missing_payer',
+      }
+      for (const endpoint of ['facets', 'matching']) {
+        const response = await client
+          .get(`/reference/corridors/${endpoint}?${dimension}=${values[dimension]}`)
+          .header('Authorization', `Bearer ${token}`)
+        response.assertStatus(200)
+        if (endpoint === 'facets') assert.equal(response.body().totalMatched, 1)
+        else
+          assert.deepEqual(
+            response.body().corridors.map((c: { id: number }) => c.id),
+            [corridor1.id]
+          )
+      }
+    })
+  }
+
+  test('combines selections with OR within a dimension and AND across dimensions', async ({
+    client,
+    assert,
+  }) => {
+    const token = await createUserWithToken()
+    const { country1, country2, corridor1 } = await seedTwoCorridorsInDifferentRegions()
+    const params = new URLSearchParams()
+    params.append('countryIds[]', String(country1.id))
+    params.append('countryIds[]', String(country2.id))
+    params.append('serviceCodes[]', 'bank_account')
+    params.append('serviceCodes[]', 'card')
+    for (const endpoint of ['facets', 'matching']) {
+      const response = await client
+        .get(`/reference/corridors/${endpoint}?${params}`)
+        .header('Authorization', `Bearer ${token}`)
+      response.assertStatus(200)
+      assert.equal(
+        endpoint === 'facets' ? response.body().totalMatched : response.body().corridors.length,
+        2
+      )
+    }
+    params.append('payerCodes[]', 'payer_a')
+    params.append('payerCodes[]', 'missing_payer')
+    const narrowed = await client
+      .get(`/reference/corridors/matching?${params}`)
+      .header('Authorization', `Bearer ${token}`)
+    narrowed.assertStatus(200)
+    assert.deepEqual(
+      narrowed.body().corridors.map((c: { id: number }) => c.id),
+      [corridor1.id]
+    )
+  })
+
+  test('conflicting country and payer multi-selections return no matches', async ({
+    client,
+    assert,
+  }) => {
+    const token = await createUserWithToken()
+    const { region1, country1 } = await seedTwoCorridorsInDifferentRegions()
+    const query = `regionIds=${region1.id}&countryIds=${country1.id},99999999&serviceCodes=bank_account,card&transactionTypeCodes=b2b,b2c&payerCodes=payer_b,missing_payer`
+    for (const endpoint of ['facets', 'matching']) {
+      const response = await client
+        .get(`/reference/corridors/${endpoint}?${query}`)
+        .header('Authorization', `Bearer ${token}`)
+      response.assertStatus(200)
+      if (endpoint === 'facets') {
+        assert.equal(response.body().totalMatched, 0)
+        assert.equal(
+          response.body().regions.find((r: { value: number }) => r.value === region1.id).count,
+          1
+        )
+        assert.equal(
+          response.body().payers.find((p: { value: string }) => p.value === 'payer_b').count,
+          0
+        )
+      } else assert.deepEqual(response.body().corridors, [])
+    }
+  })
+
+  test('preserves commas and ampersands inside an explicitly encoded payer array', async ({
+    client,
+    assert,
+  }) => {
+    const token = await createUserWithToken()
+    const { corridor1 } = await seedTwoCorridorsInDifferentRegions()
+    const payer = 'Bank, Branch & Partners'
+    await corridor1.merge({ payerCode: payer }).save()
+    const params = new URLSearchParams()
+    params.append('payerCodes[]', payer)
+    params.append('payerCodes[]', 'missing_payer')
+    for (const endpoint of ['facets', 'matching']) {
+      const response = await client
+        .get(`/reference/corridors/${endpoint}?${params}`)
+        .header('Authorization', `Bearer ${token}`)
+      response.assertStatus(200)
+      if (endpoint === 'facets') assert.equal(response.body().totalMatched, 1)
+      else
+        assert.deepEqual(
+          response.body().corridors.map((c: { id: number }) => c.id),
+          [corridor1.id]
+        )
+    }
+  })
+
+  test('clearing every filter restores the unfiltered catalog', async ({ client, assert }) => {
+    const token = await createUserWithToken()
+    await seedTwoCorridorsInDifferentRegions()
+    const query =
+      'regionIds=&countryIds=&serviceCodes=&transactionTypeCodes=&payoutCurrencyIds=&payerCodes=&hideUsdSwift=&restrictToUseCaseAllowedCountries='
+    for (const endpoint of ['facets', 'matching']) {
+      const response = await client
+        .get(`/reference/corridors/${endpoint}?${query}`)
+        .header('Authorization', `Bearer ${token}`)
+      response.assertStatus(200)
+      assert.equal(
+        endpoint === 'facets' ? response.body().totalMatched : response.body().corridors.length,
+        2
+      )
+    }
+  })
+
+  test('rejects malformed filters instead of silently returning the entire catalog', async ({
+    client,
+  }) => {
+    const token = await createUserWithToken()
+    for (const query of [
+      'countryIds=invalid,also_invalid',
+      'countryIds[nested]=1',
+      'hideUsdSwift=invalid',
+    ]) {
+      for (const endpoint of ['facets', 'matching']) {
+        const response = await client
+          .get(`/reference/corridors/${endpoint}?${query}`)
+          .header('Authorization', `Bearer ${token}`)
+        response.assertStatus(422)
+      }
+    }
+  })
+})
+
+test.group('Matching corridors (Bulk Add by Filter)', () => {
+  test('lists the individual corridors matching the current filters', async ({
+    client,
+    assert,
+  }) => {
+    const token = await createUserWithToken()
+    const { region1, corridor1 } = await seedTwoCorridorsInDifferentRegions()
+
+    const response = await client
+      .get(`/reference/corridors/matching?regionIds=${region1.id}`)
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    const body = response.body()
+    assert.lengthOf(body.corridors, 1)
+    assert.equal(body.corridors[0].id, corridor1.id)
+  })
+
+  test('returns an empty list when nothing matches', async ({ client, assert }) => {
+    const token = await createUserWithToken()
+    await seedTwoCorridorsInDifferentRegions()
+
+    const response = await client
+      .get(`/reference/corridors/matching?serviceCodes=nonexistent_service`)
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    assert.deepEqual(response.body().corridors, [])
+  })
+
+  test('with no filters, lists every corridor up to the safety cap', async ({ client, assert }) => {
+    const token = await createUserWithToken()
+    await seedTwoCorridorsInDifferentRegions()
+
+    const response = await client
+      .get('/reference/corridors/matching')
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    assert.lengthOf(response.body().corridors, 2)
+  })
+})
