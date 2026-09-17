@@ -171,3 +171,12 @@ export const updateQuoteCorridorValidator = vine.compile(
     tiers: vine.array(corridorTierFields).optional(),
   })
 )
+
+export const bulkCorridorIdsValidator = vine.compile(
+  vine.object({
+    // No .exists() check — existence/ownership is verified in the
+    // controller scoped to the quote, so invalid ids can be reported back
+    // individually instead of failing the whole request.
+    corridorIds: vine.array(vine.number().positive().withoutDecimals()).minLength(1).maxLength(500),
+  })
+)

@@ -13,7 +13,11 @@ import {
   type CorridorMasterData,
   type CorridorTierInput,
 } from '#services/quote_pricing_service'
-import { createQuoteCorridorValidator, updateQuoteCorridorValidator } from '#validators/quote'
+import {
+  bulkCorridorIdsValidator,
+  createQuoteCorridorValidator,
+  updateQuoteCorridorValidator,
+} from '#validators/quote'
 
 function masterDataFor(corridor: Corridor): CorridorMasterData {
   return {
@@ -179,6 +183,7 @@ export default class QuoteCorridorsController {
     const alreadyAddedQuery = QuoteCorridor.query()
       .where('quoteId', quote!.id)
       .where('corridorId', payload.corridorId)
+      .withScopes((s) => s.active())
     const alreadyAdded = await (
       payload.fundingCurrencyId
         ? alreadyAddedQuery.where('fundingCurrencyId', payload.fundingCurrencyId)
@@ -226,6 +231,7 @@ export default class QuoteCorridorsController {
     const quoteCorridor = await QuoteCorridor.query()
       .where('id', params.id)
       .where('quoteId', params.quoteId)
+      .withScopes((s) => s.active())
       .first()
     if (!quoteCorridor) {
       return response.notFound({ message: 'Corridor not found on this quote' })
@@ -254,12 +260,69 @@ export default class QuoteCorridorsController {
     const quoteCorridor = await QuoteCorridor.query()
       .where('id', params.id)
       .where('quoteId', params.quoteId)
+      .withScopes((s) => s.active())
       .first()
     if (!quoteCorridor) {
       return response.notFound({ message: 'Corridor not found on this quote' })
     }
 
-    await quoteCorridor.delete()
+    await quoteCorridor.merge({ deletedAt: DateTime.now() }).save()
     return response.noContent()
+  }
+
+  async bulkDelete({ auth, params, request, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const { quote, error } = await loadEditableQuote(params.quoteId, user)
+    if (error) return response.status(error.status).send({ message: error.message })
+
+    const { corridorIds } = await request.validateUsing(bulkCorridorIdsValidator)
+    const rows = await QuoteCorridor.query()
+      .where('quoteId', quote!.id)
+      .whereIn('id', corridorIds)
+      .withScopes((s) => s.active())
+
+    const foundIds = new Set(rows.map((r) => r.id))
+    await Promise.all(rows.map((r) => r.merge({ deletedAt: DateTime.now() }).save()))
+
+    return response.ok({
+      deletedIds: rows.map((r) => r.id),
+      notFoundIds: corridorIds.filter((id) => !foundIds.has(id)),
+    })
+  }
+
+  async bulkRestore({ auth, params, request, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const { quote, error } = await loadEditableQuote(params.quoteId, user)
+    if (error) return response.status(error.status).send({ message: error.message })
+
+    const { corridorIds } = await request.validateUsing(bulkCorridorIdsValidator)
+    const rows = await QuoteCorridor.query()
+      .where('quoteId', quote!.id)
+      .whereIn('id', corridorIds)
+      .whereNotNull('deletedAt')
+
+    const foundIds = new Set(rows.map((r) => r.id))
+    await Promise.all(rows.map((r) => r.merge({ deletedAt: null }).save()))
+
+    return response.ok({
+      restoredIds: rows.map((r) => r.id),
+      notFoundIds: corridorIds.filter((id) => !foundIds.has(id)),
+    })
+  }
+
+  async listDeleted({ auth, params, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const { quote, error } = await loadEditableQuote(params.quoteId, user)
+    if (error) return response.status(error.status).send({ message: error.message })
+
+    const rows = await QuoteCorridor.query()
+      .where('quoteId', quote!.id)
+      .whereNotNull('deletedAt')
+      .preload('corridor', (cq) =>
+        cq.preload('country', (ctq) => ctq.preload('region')).preload('payoutCurrency')
+      )
+      .preload('fundingCurrency')
+
+    return response.ok(rows)
   }
 }

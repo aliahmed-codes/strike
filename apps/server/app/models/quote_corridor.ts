@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon'
-import { BaseModel, belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
+import { BaseModel, belongsTo, column, hasMany, scope } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import Quote from '#models/quote'
 import Corridor from '#models/corridor'
@@ -119,4 +119,11 @@ export default class QuoteCorridor extends BaseModel {
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
+
+  @column.dateTime()
+  declare deletedAt: DateTime | null
+
+  static active = scope((query) => {
+    query.whereNull('deleted_at')
+  })
 }

@@ -304,6 +304,108 @@
           }
         },
         {
+          "name": "Bulk Delete Corridors",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"corridorIds\": [{{quote_corridor_id}}]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/corridors/bulk-delete",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}", "corridors", "bulk-delete"]
+            },
+            "description": "Soft-deletes every id in `corridorIds` that's currently active on this quote. Returns `{ deletedIds, notFoundIds }` — ids that belong to a different quote, don't exist, or are already deleted land in `notFoundIds` instead of failing the whole request (idempotent partial success, not an error)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('OK (200)', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('The requested corridor was deleted', () => pm.expect(body.deletedIds).to.include(Number(pm.environment.get('quote_corridor_id'))));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Deleted Corridors",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/corridors/deleted",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}", "corridors", "deleted"]
+            },
+            "description": "Lists this quote's currently soft-deleted corridors, with the same corridor/country/currency detail as \"Show Quote\" — the data source for a Restore picker UI."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('OK (200)', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Includes the just-deleted corridor with its details', () => {",
+                  "        const row = body.find((r) => r.id === Number(pm.environment.get('quote_corridor_id')));",
+                  "        pm.expect(row).to.exist;",
+                  "        pm.expect(row.corridor).to.exist;",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bulk Restore Corridors",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"corridorIds\": [{{quote_corridor_id}}]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/corridors/bulk-restore",
+              "host": ["{{base_url}}"],
+              "path": ["quotes", "{{quote_id}}", "corridors", "bulk-restore"]
+            },
+            "description": "Restores every id in `corridorIds` that's currently soft-deleted on this quote (its tiers come back exactly as they were). Returns `{ restoredIds, notFoundIds }` — ids that aren't currently deleted land in `notFoundIds`, not an error."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('OK (200)', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('The requested corridor was restored', () => pm.expect(body.restoredIds).to.include(Number(pm.environment.get('quote_corridor_id'))));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Remove Corridor from Quote",
           "request": {
             "method": "DELETE",
@@ -312,7 +414,8 @@
               "raw": "{{base_url}}/quotes/{{quote_id}}/corridors/{{quote_corridor_id}}",
               "host": ["{{base_url}}"],
               "path": ["quotes", "{{quote_id}}", "corridors", "{{quote_corridor_id}}"]
-            }
+            },
+            "description": "Soft-deletes the corridor (sets `deleted_at`) rather than removing the row — it disappears from the quote and its totals but can be brought back with \"Bulk Restore Corridors\". Placed after the bulk requests in this collection so it runs against the corridor while it's still active."
           }
         },
         {

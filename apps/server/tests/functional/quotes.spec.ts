@@ -5,6 +5,7 @@ import Country from '#models/country'
 import Currency from '#models/currency'
 import Corridor from '#models/corridor'
 import Quote from '#models/quote'
+import QuoteCorridor from '#models/quote_corridor'
 import UseCase from '#models/use_case'
 import IcpNode from '#models/icp_node'
 
@@ -20,11 +21,15 @@ async function createUserWithToken(role: 'admin' | 'sales' | 'viewer' = 'sales')
   return { user, token: token.value!.release() }
 }
 
-async function createCorridor() {
-  const region = await Region.create({ code: 'TST', name: 'Test Region' })
-  const country = await Country.create({ isoCode3: 'ZZL', name: 'Testland', regionId: region.id })
+async function createCorridor(suffix = '') {
+  const region = await Region.create({ code: `TST${suffix}`, name: 'Test Region' })
+  const country = await Country.create({
+    isoCode3: `ZZ${suffix || 'L'}`,
+    name: 'Testland',
+    regionId: region.id,
+  })
   const currency = await Currency.create({
-    isoCode3: 'ZZZ',
+    isoCode3: `ZZ${suffix || 'Z'}`,
     name: 'Test Currency',
     decimalPlaces: 2,
     isSource: true,
@@ -777,5 +782,319 @@ test.group('Quote corridors: tiered pricing', () => {
     response.assertStatus(200)
     assert.equal(response.body().pricingModel, 'standard')
     assert.equal(response.body().tiers.length, 0)
+  })
+})
+
+test.group('Quote corridors: bulk delete/restore', () => {
+  async function addCorridor(
+    client: import('@japa/api-client').ApiClient,
+    token: string,
+    quoteId: number,
+    corridorId: number
+  ) {
+    const response = await client
+      .post(`/quotes/${quoteId}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        corridorId,
+        yearlyVolumeUsd: 1_000_000,
+        yearlyTransactions: 10_000,
+        fixedFeeUsd: 0.5,
+        variableFeePct: 1,
+        appliedFxSpread: 0.5,
+      })
+    return response.body().id as number
+  }
+
+  test('bulk-deletes multiple corridors', async ({ client, assert }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor1 = await createCorridor()
+    const corridor2 = await createCorridor('2')
+    const id1 = await addCorridor(client, token, quote.id, corridor1.id)
+    const id2 = await addCorridor(client, token, quote.id, corridor2.id)
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [id1, id2] })
+
+    response.assertStatus(200)
+    assert.sameMembers(response.body().deletedIds, [id1, id2])
+    assert.lengthOf(response.body().notFoundIds, 0)
+
+    const row = await QuoteCorridor.findOrFail(id1)
+    assert.isNotNull(row.deletedAt)
+  })
+
+  test('bulk-restores previously deleted corridors', async ({ client, assert }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor1 = await createCorridor()
+    const corridor2 = await createCorridor('2')
+    const id1 = await addCorridor(client, token, quote.id, corridor1.id)
+    const id2 = await addCorridor(client, token, quote.id, corridor2.id)
+
+    await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [id1, id2] })
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors/bulk-restore`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [id1, id2] })
+
+    response.assertStatus(200)
+    assert.sameMembers(response.body().restoredIds, [id1, id2])
+
+    const row = await QuoteCorridor.findOrFail(id1)
+    assert.isNull(row.deletedAt)
+  })
+
+  test('reports ids from another quote or that do not exist as notFoundIds, without failing the rest', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const otherQuote = await Quote.create({ name: 'Other', ownerId: user.id, status: 'draft' })
+    const corridor1 = await createCorridor()
+    const corridor2 = await createCorridor('2')
+    const id1 = await addCorridor(client, token, quote.id, corridor1.id)
+    const foreignId = await addCorridor(client, token, otherQuote.id, corridor2.id)
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [id1, foreignId, 999999] })
+
+    response.assertStatus(200)
+    assert.deepEqual(response.body().deletedIds, [id1])
+    assert.sameMembers(response.body().notFoundIds, [foreignId, 999999])
+
+    const foreignRow = await QuoteCorridor.findOrFail(foreignId)
+    assert.isNull(foreignRow.deletedAt)
+  })
+
+  test('re-deleting an already-deleted corridor is idempotent, not an error', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+    const id = await addCorridor(client, token, quote.id, corridor.id)
+
+    await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [id] })
+    const before = await QuoteCorridor.findOrFail(id)
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [id] })
+
+    response.assertStatus(200)
+    assert.lengthOf(response.body().deletedIds, 0)
+    assert.deepEqual(response.body().notFoundIds, [id])
+
+    const after = await QuoteCorridor.findOrFail(id)
+    assert.equal(before.deletedAt?.toMillis(), after.deletedAt?.toMillis())
+  })
+
+  test('restoring a never-deleted corridor is idempotent, not an error', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+    const id = await addCorridor(client, token, quote.id, corridor.id)
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors/bulk-restore`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [id] })
+
+    response.assertStatus(200)
+    assert.lengthOf(response.body().restoredIds, 0)
+    assert.deepEqual(response.body().notFoundIds, [id])
+
+    const row = await QuoteCorridor.findOrFail(id)
+    assert.isNull(row.deletedAt)
+  })
+
+  test('a soft-deleted corridor is excluded from the quote show endpoint and its totals', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor1 = await createCorridor()
+    const corridor2 = await createCorridor('2')
+    const id1 = await addCorridor(client, token, quote.id, corridor1.id)
+    await addCorridor(client, token, quote.id, corridor2.id)
+
+    await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [id1] })
+
+    const response = await client
+      .get(`/quotes/${quote.id}`)
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    assert.lengthOf(response.body().quote.corridors, 1)
+    assert.equal(response.body().totals.corridorCount, 1)
+
+    // Soft- not hard-deleted: the row still exists in the DB.
+    const row = await QuoteCorridor.findOrFail(id1)
+    assert.isNotNull(row.deletedAt)
+  })
+
+  test('the partial unique index allows re-adding a corridor+funding-currency pair after it is deleted', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+    const id = await addCorridor(client, token, quote.id, corridor.id)
+
+    await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [id] })
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        corridorId: corridor.id,
+        yearlyVolumeUsd: 1_000_000,
+        yearlyTransactions: 10_000,
+        fixedFeeUsd: 0.5,
+        variableFeePct: 1,
+        appliedFxSpread: 0.5,
+      })
+
+    response.assertStatus(201)
+    assert.notEqual(response.body().id, id)
+  })
+
+  test('bulk-delete requires the quote to be a draft', async ({ client, assert }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+    const id = await addCorridor(client, token, quote.id, corridor.id)
+    await Quote.query().where('id', quote.id).update({ status: 'submitted' })
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [id] })
+
+    response.assertStatus(409)
+    const row = await QuoteCorridor.findOrFail(id)
+    assert.isNull(row.deletedAt)
+  })
+
+  test("returns 403 when bulk-deleting on another user's quote", async ({ client }) => {
+    const { user: owner } = await createUserWithToken()
+    const { token: otherToken } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: owner.id, status: 'draft' })
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${otherToken}`)
+      .json({ corridorIds: [1] })
+
+    response.assertStatus(403)
+  })
+
+  test('returns 404 for bulk-delete on a quote that does not exist', async ({ client }) => {
+    const { token } = await createUserWithToken()
+
+    const response = await client
+      .post(`/quotes/999999/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [1] })
+
+    response.assertStatus(404)
+  })
+
+  test('rejects an empty corridorIds array', async ({ client }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [] })
+
+    response.assertStatus(422)
+  })
+
+  test('rejects a missing corridorIds field', async ({ client }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+
+    const response = await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({})
+
+    response.assertStatus(422)
+  })
+
+  test('single-row delete soft-deletes rather than removing the row', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor = await createCorridor()
+    const id = await addCorridor(client, token, quote.id, corridor.id)
+
+    const response = await client
+      .delete(`/quotes/${quote.id}/corridors/${id}`)
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(204)
+    const row = await QuoteCorridor.findOrFail(id)
+    assert.isNotNull(row.deletedAt)
+  })
+
+  test('lists soft-deleted corridors with corridor/currency details for the restore picker', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await Quote.create({ name: 'Quote', ownerId: user.id, status: 'draft' })
+    const corridor1 = await createCorridor()
+    const corridor2 = await createCorridor('2')
+    const id1 = await addCorridor(client, token, quote.id, corridor1.id)
+    const id2 = await addCorridor(client, token, quote.id, corridor2.id)
+
+    await client
+      .post(`/quotes/${quote.id}/corridors/bulk-delete`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ corridorIds: [id1] })
+
+    const response = await client
+      .get(`/quotes/${quote.id}/corridors/deleted`)
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    assert.lengthOf(response.body(), 1)
+    assert.equal(response.body()[0].id, id1)
+    assert.equal(response.body()[0].corridor.id, corridor1.id)
+    assert.equal(response.body()[0].corridor.country.name, 'Testland')
+    assert.exists(response.body()[0].corridor.payoutCurrency)
+    assert.notEqual(response.body()[0].id, id2)
   })
 })

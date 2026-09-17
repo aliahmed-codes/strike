@@ -86,16 +86,17 @@ node ace db:seed
 
 Short version — full detail is in FEATURES.md:
 
-0. State the plan for the step (what's being built, what will be tested) before writing code — and if there's more than one reasonable way to build a piece of it, ask which one instead of picking silently.
+0. State the plan for the step (what's being built, what will be tested) before writing code — and if there's more than one reasonable way to build a piece of it, ask which one instead of picking silently. If the feature has an equivalent in the old app (`D:\buy-frame\STRIKE`), read its actual source first and cite it in the plan — never plan from memory or assumption about what it "probably" does (see CLAUDE.md §2).
 1. Backend (migration → model → validator → controller → route) for the feature.
 2. Backend tests for every endpoint added. Run `npm run test` in `apps/server` — must pass.
-3. Frontend for the feature, wired to the real API (no mock data left in place).
-4. A test plan for the frontend flow, executed and passing.
-5. A plain-language summary of what was built and how it works — enough to fully understand the change, not just "tests passed."
-6. The developer tests the change personally and confirms it. Automated tests passing is not, by itself, a reason to commit.
-7. `git commit` for the completed feature, referencing the FEATURES.md item — only after that personal confirmation.
+3. Update the Postman collection (`postman/STRIKE.postman_collection.json`, see §7) with every endpoint added or changed — a feature's backend isn't done until this is current, not a separate follow-up task.
+4. Frontend for the feature, wired to the real API (no mock data left in place).
+5. A test plan for the frontend flow, executed and passing.
+6. A plain-language summary of what was built and how it works — enough to fully understand the change, not just "tests passed."
+7. The developer tests the change personally and confirms it. Automated tests passing is not, by itself, a reason to commit.
+8. `git commit` for the completed feature, referencing the FEATURES.md item — only after that personal confirmation.
 
-Do not start step 3 before step 2 is green. Do not commit before step 6. Do not start the next feature before step 7.
+Do not start step 4 before step 2 is green. Do not commit before step 7. Do not start the next feature before step 8.
 
 ## 5. Testing
 
@@ -123,12 +124,14 @@ This is separate from your local (non-Docker) `apps/server/.env` — that file i
 
 A ready-to-import Postman collection lives in `postman/`:
 
-- `STRIKE.postman_collection.json` — the requests, organized by feature (currently just `Auth`: Login, Me, Logout — there's no Register request since there's no public registration, see DEV.md §3).
+- `STRIKE.postman_collection.json` — the requests, organized by feature folder (`Auth`, `Reference Data`, `Quotes`, `Cleanup`, growing as features are added).
 - `STRIKE.postman_environment.json` — a `base_url` (`http://localhost:3334`) and a `token` variable.
 
 **To use it:** in Postman, File → Import both files, then select the "STRIKE - Local" environment from the environment dropdown (top right) before sending requests. Login has a test script that automatically saves the returned token into the `token` environment variable, so Me and Logout (which send `Authorization: Bearer {{token}}`) work immediately afterward with no manual copying.
 
-Point `base_url` at whichever server you're running against (local `npm run dev`, or the Docker stack — both listen on :3334 by default). As new features add endpoints, add them to this collection in their own folder (e.g. a future "Quotes" folder), following the same pattern: use `{{base_url}}`, and add test scripts for anything a later request depends on (like a saved token or an ID).
+Point `base_url` at whichever server you're running against (local `npm run dev`, or the Docker stack — both listen on :3334 by default).
+
+**Every backend endpoint added or changed must be reflected here in the same step, not as a follow-up** (see §4 step 3) — this collection is the way anyone (including the developer testing a change before it's committed) exercises the real API by hand, so it drifting out of date defeats its purpose. Add new requests to the relevant feature folder, following the existing pattern: use `{{base_url}}` and `{{...}}` path variables for anything set by an earlier request or the environment, a `description` explaining what the endpoint does and any non-obvious behavior, and a test script for anything a later request depends on (like a saved token or an ID).
 
 To verify the whole collection still works from the command line (useful before a demo, or in CI later), run it headlessly with [Newman](https://www.npmjs.com/package/newman):
 

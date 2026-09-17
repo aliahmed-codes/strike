@@ -31,7 +31,7 @@ export default class QuotesController {
     const user = auth.getUserOrFail()
 
     const query = Quote.query()
-      .withCount('corridors', (q) => q.as('corridorCount'))
+      .withCount('corridors', (q) => q.withScopes((s) => s.active()).as('corridorCount'))
       .orderBy('updatedAt', 'desc')
 
     if (user.role !== 'admin') {
@@ -85,6 +85,7 @@ export default class QuotesController {
     await quote.load('sourceCurrencies')
     await quote.load('defaultFeeCurrency')
     await quote.load('corridors', (q) => {
+      q.withScopes((s) => s.active())
       // Stable order across refetches (e.g. after every save) — without an
       // explicit orderBy, Postgres doesn't guarantee row order, so the
       // Pricing tab's rows could visibly shuffle on every re-render.

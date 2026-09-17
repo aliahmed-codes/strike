@@ -55,6 +55,9 @@ router
     router.post('/:quoteId/corridors', [QuoteCorridorsController, 'store'])
     router.patch('/:quoteId/corridors/:id', [QuoteCorridorsController, 'update'])
     router.delete('/:quoteId/corridors/:id', [QuoteCorridorsController, 'destroy'])
+    router.post('/:quoteId/corridors/bulk-delete', [QuoteCorridorsController, 'bulkDelete'])
+    router.post('/:quoteId/corridors/bulk-restore', [QuoteCorridorsController, 'bulkRestore'])
+    router.get('/:quoteId/corridors/deleted', [QuoteCorridorsController, 'listDeleted'])
 
     router.get('/:quoteId/setup-fee', [SetupFeeController, 'show'])
     router.put('/:quoteId/setup-fee', [SetupFeeController, 'update'])
