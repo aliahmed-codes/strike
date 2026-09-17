@@ -704,6 +704,15 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   const savedPairKeys = new Set(
     corridors.map((c) => savedPairKey(c.corridorId, c.fundingCurrencyId ?? null))
   )
+  // A soft-deleted corridor is, from the matching-corridors query's point of
+  // view, indistinguishable from one that was never added — it still
+  // matches the active filters, so without this it would immediately
+  // reappear as a blank preview row the moment it's deleted. Sourced from
+  // the real, persisted deleted-corridors list (not session-only state), so
+  // this holds across a page refresh too, until the corridor is restored.
+  const deletedPairKeys = new Set(
+    (deletedCorridors ?? []).map((c) => savedPairKey(c.corridorId, c.fundingCurrencyId ?? null))
+  )
   // One preview row per matching corridor per quote funding currency, or a
   // single currency-less row if the quote has none selected yet.
   const quoteFundingCurrencyIds =
@@ -712,7 +721,7 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   for (const corridor of matchesError ? [] : (matches ?? [])) {
     for (const fundingCurrencyId of quoteFundingCurrencyIds) {
       const pairKey = savedPairKey(corridor.id, fundingCurrencyId)
-      if (savedPairKeys.has(pairKey) || dismissedPairKeys.has(pairKey)) continue
+      if (savedPairKeys.has(pairKey) || dismissedPairKeys.has(pairKey) || deletedPairKeys.has(pairKey)) continue
       previewRows.push({ corridor, fundingCurrencyId })
     }
   }
