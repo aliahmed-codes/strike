@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/api-client'
 export const quoteKeys = {
   list: ['quotes'] as const,
   detail: (id: number) => ['quotes', id] as const,
+  deletedCorridors: (id: number) => ['quotes', id, 'deleted-corridors'] as const,
 }
 
 export function useQuotesList() {

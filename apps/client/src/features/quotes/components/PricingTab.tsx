@@ -1,6 +1,16 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import { AlertTriangle, Filter } from 'lucide-react'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   computeCorridorPricing,
   computeFxDefaultSpreadPct,
   computeFxMinimumSpreadPct,
@@ -25,6 +35,9 @@ import { useCorridorCatalog, useCorridorFacets, useCurrencies, useMatchingCorrid
 import { useQuote } from '../api/useQuotes'
 import {
   useAddQuoteCorridor,
+  useBulkDeleteQuoteCorridors,
+  useBulkRestoreQuoteCorridors,
+  useDeletedQuoteCorridors,
   useRemoveQuoteCorridor,
   useUpdateQuoteCorridor,
 } from '../api/useQuoteCorridors'
@@ -621,11 +634,12 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   // funding-currency preview key, not just corridor id, so promoting one
   // currency's preview for a corridor never blocks another currency's.
   const [promotingKeys, setPromotingKeys] = useState<Set<string>>(new Set())
-  // A saved row the user explicitly removed, or a preview row they explicitly
-  // dismissed — kept client-side only, for this session, so it doesn't
-  // immediately reappear as a preview row while it still matches the active
-  // filters (the old app needs a whole `deleted_corridors` column + restore
-  // modal to manage the fallout of NOT doing this; we just don't persist it).
+  // A preview row (never saved) the user dismissed — kept client-side only,
+  // for this session, so it doesn't immediately reappear while it still
+  // matches the active filters. A *saved* row's removal is real and
+  // persisted server-side (soft-delete, restorable — see Bulk Delete/Restore
+  // below); this set only ever needs to cover preview rows, which have
+  // nothing on the server to soft-delete in the first place.
   // Keyed by corridor+funding-currency pair, not corridor alone.
   const [dismissedPairKeys, setDismissedPairKeys] = useState<Set<string>>(new Set())
   // The Pricing tab's own column sort/filter — a view-only preference over
@@ -641,6 +655,13 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   const [bulkEditValue, setBulkEditValue] = useState('')
   const [fxSpreadMode, setFxSpreadMode] = useState<'custom' | 'default' | 'minimum' | 'markup'>('custom')
   const [fxMarkupValue, setFxMarkupValue] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showRestoreModal, setShowRestoreModal] = useState(false)
+  const [restoreSelection, setRestoreSelection] = useState<Set<number>>(new Set())
+  const [bulkActionError, setBulkActionError] = useState<string | null>(null)
+  const { data: deletedCorridors } = useDeletedQuoteCorridors(quoteId)
+  const bulkDeleteCorridors = useBulkDeleteQuoteCorridors(quoteId)
+  const bulkRestoreCorridors = useBulkRestoreQuoteCorridors(quoteId)
 
   const quote = data?.quote
   // The Pricing tab previews against the *applied* filters, not the live
@@ -1021,6 +1042,55 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
     }
   }
 
+  /**
+   * A selected preview row was never saved, so "deleting" it is the same
+   * local dismiss the single-row "Dismiss" action already does — only saved
+   * rows go through the real (restorable) bulk-delete endpoint.
+   */
+  function handleBulkDelete() {
+    const savedIds: number[] = []
+    for (const key of selectedRowKeys) {
+      if (key.startsWith('preview-')) {
+        const { corridorId, fundingCurrencyId } = parsePreviewKey(key)
+        setDismissedPairKeys((prev) => new Set(prev).add(savedPairKey(corridorId, fundingCurrencyId)))
+        clearRowEdit(tabKey, key)
+      } else {
+        savedIds.push(Number(key))
+      }
+    }
+
+    if (savedIds.length > 0) {
+      bulkDeleteCorridors.mutate(savedIds, {
+        onSuccess: (result) => {
+          setBulkActionError(
+            result.notFoundIds.length > 0
+              ? `${result.deletedIds?.length ?? 0} deleted; ${result.notFoundIds.length} could not be found (already gone or out of date — try refreshing).`
+              : null
+          )
+        },
+        onError: () => setBulkActionError("Couldn't delete the selected corridors. Check your connection and try again."),
+      })
+    }
+
+    setSelectedRowKeys(new Set())
+    setShowDeleteConfirm(false)
+  }
+
+  function handleRestoreSelected() {
+    bulkRestoreCorridors.mutate([...restoreSelection], {
+      onSuccess: (result) => {
+        setBulkActionError(
+          result.notFoundIds.length > 0
+            ? `${result.restoredIds?.length ?? 0} restored; ${result.notFoundIds.length} could not be found (already restored or out of date — try refreshing).`
+            : null
+        )
+      },
+      onError: () => setBulkActionError("Couldn't restore the selected corridors. Check your connection and try again."),
+    })
+    setRestoreSelection(new Set())
+    setShowRestoreModal(false)
+  }
+
   function tiersFor(row: QuoteCorridor): CorridorTierInput[] {
     return (
       tierDrafts[String(row.id)] ??
@@ -1196,6 +1266,22 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                 Bulk Edit ({selectedRowKeys.size})
               </Button>
             )}
+            {selectedRowKeys.size > 0 && (
+              <Button variant="destructive" size="sm" onClick={() => setShowDeleteConfirm(true)}>
+                Delete ({selectedRowKeys.size})
+              </Button>
+            )}
+            {(deletedCorridors?.length ?? 0) > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setShowRestoreModal(true)}>
+                Restore Deleted ({deletedCorridors!.length})
+              </Button>
+            )}
+          </div>
+        )}
+        {bulkActionError && (
+          <div className="mb-2 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            <span>{bulkActionError}</span>
           </div>
         )}
         <Dialog open={showFilterModal} onOpenChange={setShowFilterModal}>
@@ -1481,6 +1567,89 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                 }
               >
                 Apply to {selectedRowKeys.size} Corridors
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {selectedRowKeys.size} Corridors</AlertDialogTitle>
+              <AlertDialogDescription>
+                These corridors will be removed from this quote. You can bring them back later from
+                "Restore Deleted."
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={handleBulkDelete}>
+                Delete {selectedRowKeys.size} Corridors
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <Dialog open={showRestoreModal} onOpenChange={setShowRestoreModal}>
+          <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Restore Deleted Corridors</DialogTitle>
+              <DialogDescription>Select the deleted corridor(s) you want to restore.</DialogDescription>
+            </DialogHeader>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
+                  <th className="pb-2 pr-3">
+                    <input
+                      type="checkbox"
+                      checked={
+                        (deletedCorridors?.length ?? 0) > 0 &&
+                        (deletedCorridors ?? []).every((r) => restoreSelection.has(r.id))
+                      }
+                      onChange={(e) =>
+                        setRestoreSelection(
+                          e.target.checked ? new Set((deletedCorridors ?? []).map((r) => r.id)) : new Set()
+                        )
+                      }
+                    />
+                  </th>
+                  <th className="pb-2 pr-3 font-medium">Country</th>
+                  <th className="pb-2 pr-3 font-medium">Transaction Type</th>
+                  <th className="pb-2 pr-3 font-medium">Service</th>
+                  <th className="pb-2 font-medium">Funding → Payout</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(deletedCorridors ?? []).map((row) => (
+                  <tr key={row.id} className="border-b last:border-0">
+                    <td className="py-2 pr-3">
+                      <input
+                        type="checkbox"
+                        checked={restoreSelection.has(row.id)}
+                        onChange={() =>
+                          setRestoreSelection((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(row.id)) next.delete(row.id)
+                            else next.add(row.id)
+                            return next
+                          })
+                        }
+                      />
+                    </td>
+                    <td className="py-2 pr-3">{row.corridor?.country?.name ?? '—'}</td>
+                    <td className="py-2 pr-3">{row.corridor?.transactionTypeCode ?? '—'}</td>
+                    <td className="py-2 pr-3">{row.corridor?.serviceCode ?? '—'}</td>
+                    <td className="py-2">
+                      {row.fundingCurrency?.isoCode3 ?? '—'} → {row.corridor?.payoutCurrency?.isoCode3 ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowRestoreModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRestoreSelected} disabled={restoreSelection.size === 0}>
+                Restore Selected ({restoreSelection.size})
               </Button>
             </DialogFooter>
           </DialogContent>
