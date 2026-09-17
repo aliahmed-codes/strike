@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
+  CORRIDOR_FIELD_LIMITS,
   computeCorridorPricing,
   computeFxDefaultSpreadPct,
   computeFxMinimumSpreadPct,
@@ -19,8 +20,10 @@ import {
   computeTieredCorridorPricing,
   computeTreasuryFxCostPct,
   seedQuoteCorridorFromCatalog,
+  validateCorridorField,
   validateTierAllocation,
   type Corridor,
+  type CorridorLimitedField,
   type CorridorTierInput,
   type PricedCorridor,
   type PricingModel,
@@ -30,6 +33,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { getApiErrorMessage, getApiFieldErrors } from '@/lib/api-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import { useCorridorCatalog, useCorridorFacets, useCurrencies, useMatchingCorridors } from '../api/useReferenceData'
@@ -623,6 +627,12 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   const clearRowEdit = useCorridorEditsStore((s) => s.clearRow)
   const [isSavingCorridors, setIsSavingCorridors] = useState(false)
   const [saveCorridorsError, setSaveCorridorsError] = useState<string | null>(null)
+  // Per-row field-level validation messages — populated live as the user
+  // types (against the same limits the backend enforces) and by a rejected
+  // save (the server's real reason, not a generic "check your connection").
+  // `_general` holds a message with no single field to attach to, e.g. the
+  // cross-tier allocation check firing on a stale save.
+  const [rowFieldErrors, setRowFieldErrors] = useState<Record<string, Record<string, string>>>({})
   // Per-row in-progress tier edits — replaces the whole tier set for that
   // row until "Save Tiers" is clicked, then cleared so the saved data takes over.
   const [tierDrafts, setTierDrafts] = useState<Record<string, CorridorTierInput[]>>({})
@@ -815,6 +825,15 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
 
   function handleFieldChange(key: string, field: keyof EditableFields, value: number) {
     setRowField(tabKey, key, field, value)
+    if (field in CORRIDOR_FIELD_LIMITS) {
+      const message = validateCorridorField(field as CorridorLimitedField, value)
+      setRowFieldErrors((prev) => {
+        const nextRow = { ...prev[key] }
+        if (message) nextRow[field] = message
+        else delete nextRow[field]
+        return { ...prev, [key]: nextRow }
+      })
+    }
   }
 
   /**
@@ -1001,6 +1020,9 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   const dirtyRowKeys = Object.keys(rowEdits).filter(
     (key) => displayRowKeys.has(key) && Object.keys(rowEdits[key] ?? {}).length > 0
   )
+  const hasBlockingFieldErrors = dirtyRowKeys.some(
+    (key) => Object.keys(rowFieldErrors[key] ?? {}).length > 0
+  )
 
   /**
    * The one explicit save action for every staged corridor edit — new-row
@@ -1024,15 +1046,28 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
         } else {
           await saveRow(Number(key), key)
         }
-      } catch {
+        setRowFieldErrors((prev) => {
+          if (!prev[key]) return prev
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+      } catch (error) {
         failedLabels.push(labelForRowKey(key))
+        const fieldErrors = getApiFieldErrors(error)
+        setRowFieldErrors((prev) => ({
+          ...prev,
+          [key]: fieldErrors
+            ? Object.fromEntries(fieldErrors.map((fe) => [fe.field, fe.message]))
+            : { _general: getApiErrorMessage(error) },
+        }))
       }
     }
 
     setIsSavingCorridors(false)
     setSaveCorridorsError(
       failedLabels.length > 0
-        ? `Couldn't save ${failedLabels.length} corridor${failedLabels.length > 1 ? 's' : ''}: ${failedLabels.join(', ')}. Your edits are still here — check your connection and try again.`
+        ? `Couldn't save ${failedLabels.length} corridor${failedLabels.length > 1 ? 's' : ''}: ${failedLabels.join(', ')}. Your edits are still here — see the details below.`
         : null
     )
   }
@@ -1332,7 +1367,7 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
             <Button
               size="sm"
               onClick={handleSaveEditedCorridors}
-              disabled={dirtyRowKeys.length === 0 || isSavingCorridors}
+              disabled={dirtyRowKeys.length === 0 || isSavingCorridors || hasBlockingFieldErrors}
             >
               {isSavingCorridors
                 ? 'Saving…'
@@ -1917,6 +1952,9 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                           >
                             {expandedDetailRows.has(item.key) ? 'Hide details' : 'Details'}
                           </button>
+                          {rowFieldErrors[item.key]?._general && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key]._general}</p>
+                          )}
                         </td>
                         <td className="py-2 pr-3">
                           {isPreview ? (
@@ -1977,24 +2015,33 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             type="number"
                             value={current.atvUsd}
                             className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.atvUsd}
                             onChange={(e) => handleFieldChange(item.key, 'atvUsd', Number(e.target.value))}
                           />
+                          {rowFieldErrors[item.key]?.atvUsd && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].atvUsd}</p>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           <Input
                             type="number"
                             value={current.yearlyVolumeUsd}
                             className="h-8 w-28"
+                            aria-invalid={!!rowFieldErrors[item.key]?.yearlyVolumeUsd}
                             onChange={(e) =>
                               handleFieldChange(item.key, 'yearlyVolumeUsd', Number(e.target.value))
                             }
                           />
+                          {rowFieldErrors[item.key]?.yearlyVolumeUsd && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].yearlyVolumeUsd}</p>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           <Input
                             type="number"
                             value={current.yearlyTransactions}
                             className="h-8 w-24"
+                            aria-invalid={!!rowFieldErrors[item.key]?.yearlyTransactions}
                             onChange={(e) =>
                               handleFieldChange(
                                 item.key,
@@ -2003,16 +2050,23 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                               )
                             }
                           />
+                          {rowFieldErrors[item.key]?.yearlyTransactions && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].yearlyTransactions}</p>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           <Input
                             type="number"
                             value={current.fixedFeeUsd}
                             className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.fixedFeeUsd}
                             onChange={(e) =>
                               handleFieldChange(item.key, 'fixedFeeUsd', Number(e.target.value))
                             }
                           />
+                          {rowFieldErrors[item.key]?.fixedFeeUsd && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].fixedFeeUsd}</p>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           {(() => {
@@ -2040,10 +2094,14 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             step="0.01"
                             value={current.variableFeePct}
                             className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.variableFeePct}
                             onChange={(e) =>
                               handleFieldChange(item.key, 'variableFeePct', Number(e.target.value))
                             }
                           />
+                          {rowFieldErrors[item.key]?.variableFeePct && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].variableFeePct}</p>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           <Input
@@ -2051,10 +2109,14 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             step="0.01"
                             value={current.feeDiscountPct}
                             className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.feeDiscountPct}
                             onChange={(e) =>
                               handleFieldChange(item.key, 'feeDiscountPct', Number(e.target.value))
                             }
                           />
+                          {rowFieldErrors[item.key]?.feeDiscountPct && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].feeDiscountPct}</p>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           <Input
@@ -2062,10 +2124,14 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             step="0.01"
                             value={current.appliedFxSpread}
                             className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.appliedFxSpread}
                             onChange={(e) =>
                               handleFieldChange(item.key, 'appliedFxSpread', Number(e.target.value))
                             }
                           />
+                          {rowFieldErrors[item.key]?.appliedFxSpread && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].appliedFxSpread}</p>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           {previewSummary ? money(previewSummary.totalRevenue) : money(savedRow?.totalRevenue ?? null)}

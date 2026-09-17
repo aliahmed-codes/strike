@@ -1,4 +1,5 @@
 import vine from '@vinejs/vine'
+import { CORRIDOR_FIELD_LIMITS } from '@strike/shared'
 
 const PRICING_STRATEGIES = [
   'corridor_pricing',
@@ -125,23 +126,39 @@ const corridorPricingFields = {
     .positive()
     .exists({ table: 'currencies', column: 'id' })
     .optional(),
-  atvUsd: vine.number().min(0).optional(),
-  yearlyVolumeUsd: vine.number().min(0),
-  yearlyTransactions: vine.number().min(0),
-  fixedFeeUsd: vine.number().min(0),
-  variableFeePct: vine.number().min(0).max(100),
-  appliedFxSpread: vine.number().min(0).max(100),
-  feeDiscountPct: vine.number().min(0).max(100).optional(),
+  atvUsd: vine.number().min(CORRIDOR_FIELD_LIMITS.atvUsd.min).optional(),
+  yearlyVolumeUsd: vine.number().min(CORRIDOR_FIELD_LIMITS.yearlyVolumeUsd.min),
+  yearlyTransactions: vine.number().min(CORRIDOR_FIELD_LIMITS.yearlyTransactions.min),
+  fixedFeeUsd: vine.number().min(CORRIDOR_FIELD_LIMITS.fixedFeeUsd.min),
+  variableFeePct: vine
+    .number()
+    .min(CORRIDOR_FIELD_LIMITS.variableFeePct.min)
+    .max(CORRIDOR_FIELD_LIMITS.variableFeePct.max),
+  appliedFxSpread: vine
+    .number()
+    .min(CORRIDOR_FIELD_LIMITS.appliedFxSpread.min)
+    .max(CORRIDOR_FIELD_LIMITS.appliedFxSpread.max),
+  feeDiscountPct: vine
+    .number()
+    .min(CORRIDOR_FIELD_LIMITS.feeDiscountPct.min)
+    .max(CORRIDOR_FIELD_LIMITS.feeDiscountPct.max)
+    .optional(),
 }
 
 const PRICING_MODELS = ['standard', 'tiered'] as const
 
 const corridorTierFields = vine.object({
   tierNumber: vine.number().min(1).max(3),
-  yearlyVolumeUsd: vine.number().min(0),
-  fixedFeeUsd: vine.number().min(0),
-  variableFeePct: vine.number().min(0).max(100),
-  appliedFxSpread: vine.number().min(0).max(100),
+  yearlyVolumeUsd: vine.number().min(CORRIDOR_FIELD_LIMITS.yearlyVolumeUsd.min),
+  fixedFeeUsd: vine.number().min(CORRIDOR_FIELD_LIMITS.fixedFeeUsd.min),
+  variableFeePct: vine
+    .number()
+    .min(CORRIDOR_FIELD_LIMITS.variableFeePct.min)
+    .max(CORRIDOR_FIELD_LIMITS.variableFeePct.max),
+  appliedFxSpread: vine
+    .number()
+    .min(CORRIDOR_FIELD_LIMITS.appliedFxSpread.min)
+    .max(CORRIDOR_FIELD_LIMITS.appliedFxSpread.max),
 })
 
 export const createQuoteCorridorValidator = vine.compile(
@@ -160,13 +177,25 @@ export const updateQuoteCorridorValidator = vine.compile(
     // preview). To change it, remove the row and let it reappear as a
     // preview under the intended currency, rather than allowing an in-place
     // edit that could collide with another row already using that currency.
-    atvUsd: vine.number().min(0).optional(),
-    yearlyVolumeUsd: vine.number().min(0).optional(),
-    yearlyTransactions: vine.number().min(0).optional(),
-    fixedFeeUsd: vine.number().min(0).optional(),
-    variableFeePct: vine.number().min(0).max(100).optional(),
-    appliedFxSpread: vine.number().min(0).max(100).optional(),
-    feeDiscountPct: vine.number().min(0).max(100).optional(),
+    atvUsd: vine.number().min(CORRIDOR_FIELD_LIMITS.atvUsd.min).optional(),
+    yearlyVolumeUsd: vine.number().min(CORRIDOR_FIELD_LIMITS.yearlyVolumeUsd.min).optional(),
+    yearlyTransactions: vine.number().min(CORRIDOR_FIELD_LIMITS.yearlyTransactions.min).optional(),
+    fixedFeeUsd: vine.number().min(CORRIDOR_FIELD_LIMITS.fixedFeeUsd.min).optional(),
+    variableFeePct: vine
+      .number()
+      .min(CORRIDOR_FIELD_LIMITS.variableFeePct.min)
+      .max(CORRIDOR_FIELD_LIMITS.variableFeePct.max)
+      .optional(),
+    appliedFxSpread: vine
+      .number()
+      .min(CORRIDOR_FIELD_LIMITS.appliedFxSpread.min)
+      .max(CORRIDOR_FIELD_LIMITS.appliedFxSpread.max)
+      .optional(),
+    feeDiscountPct: vine
+      .number()
+      .min(CORRIDOR_FIELD_LIMITS.feeDiscountPct.min)
+      .max(CORRIDOR_FIELD_LIMITS.feeDiscountPct.max)
+      .optional(),
     pricingModel: vine.enum(PRICING_MODELS).optional(),
     tiers: vine.array(corridorTierFields).optional(),
   })
