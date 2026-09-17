@@ -1,4 +1,5 @@
 import { Fragment, useState, type ReactNode } from 'react'
+import ExcelJS from 'exceljs'
 import { AlertTriangle, Filter } from 'lucide-react'
 import {
   AlertDialog,
@@ -659,6 +660,7 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   const [showRestoreModal, setShowRestoreModal] = useState(false)
   const [restoreSelection, setRestoreSelection] = useState<Set<number>>(new Set())
   const [bulkActionError, setBulkActionError] = useState<string | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
   const { data: deletedCorridors } = useDeletedQuoteCorridors(quoteId)
   const bulkDeleteCorridors = useBulkDeleteQuoteCorridors(quoteId)
   const bulkRestoreCorridors = useBulkRestoreQuoteCorridors(quoteId)
@@ -1186,6 +1188,105 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   }))
   const quoteTotals = computeQuoteTotals(pricedCorridors)
 
+  // The single source of truth for the Excel export's columns — reusing the
+  // same RowView the table renders from, so an export can never silently
+  // omit a real column the way the old app's hand-typed, never-imported
+  // export header list drifted from its own on-screen column definitions.
+  const exportColumns: { label: string; value: (row: RowView) => string | number | null }[] = [
+    { label: 'Corridor', value: (r) => (r.corridor ? corridorLabel(r.corridor) : r.savedRow ? `#${r.savedRow.corridorId}` : '') },
+    { label: 'Pricing Model', value: (r) => (r.savedRow?.pricingModel === 'tiered' ? 'Tiered' : 'Standard') },
+    { label: 'Funding Currency', value: (r) => r.fundingCurrencyObj?.isoCode3 ?? '' },
+    { label: 'Source Currency', value: () => quote?.sourceCurrency?.isoCode3 ?? '' },
+    { label: 'Std Fixed Fee', value: (r) => r.corridor?.stdFixedFeeUsd ?? null },
+    { label: 'Std Variable Fee %', value: (r) => r.corridor?.stdVariableFeePct ?? null },
+    { label: 'ATV (USD)', value: (r) => r.current.atvUsd },
+    { label: 'Yearly Volume', value: (r) => r.current.yearlyVolumeUsd },
+    { label: 'Yearly Transactions', value: (r) => r.current.yearlyTransactions },
+    { label: 'Fixed Fee (USD)', value: (r) => r.current.fixedFeeUsd },
+    {
+      label: `Fee (${feeCurrency?.isoCode3 ?? 'Selected Currency'})`,
+      value: (r) => usdToFeeCurrencyAmount(r.current.fixedFeeUsd, feeCurrency),
+    },
+    { label: 'Variable Fee %', value: (r) => r.current.variableFeePct },
+    { label: 'Fee Discount %', value: (r) => r.current.feeDiscountPct },
+    { label: 'FX Spread', value: (r) => r.current.appliedFxSpread },
+    { label: 'Revenue', value: (r) => r.totalRevenue },
+    { label: 'FX Margin %', value: (r) => r.fxMarginPct },
+    { label: 'Margin Fee', value: (r) => r.marginFee },
+    { label: 'Margin Fee %', value: (r) => r.marginFeePct },
+    { label: 'Margin %', value: (r) => r.marginPct },
+    { label: 'Gross Margin %', value: (r) => r.grossMarginPct },
+    { label: 'Take Rate %', value: (r) => r.takeRatePct },
+    { label: 'Financial Approval', value: (r) => (r.needsFinancialApproval ? 'Yes' : 'No') },
+    { label: 'Network Approval', value: (r) => (r.needsNetworkApproval ? 'Yes' : 'No') },
+    { label: 'Status', value: (r) => (r.isPreview ? 'Not saved (preview)' : r.isDirty ? 'Unsaved changes' : 'Saved') },
+  ]
+
+  const tierBreakdownColumns: { label: string; value: (row: RowView, tier: NonNullable<QuoteCorridor['tiers']>[number]) => string | number | null }[] = [
+    { label: 'Corridor', value: (r) => (r.corridor ? corridorLabel(r.corridor) : '') },
+    { label: 'Tier Number', value: (_r, t) => t.tierNumber },
+    { label: 'Yearly Volume', value: (_r, t) => t.yearlyVolumeUsd },
+    { label: 'Fixed Fee', value: (_r, t) => t.fixedFeeUsd },
+    { label: 'Variable Fee %', value: (_r, t) => t.variableFeePct },
+    { label: 'FX Spread', value: (_r, t) => t.appliedFxSpread },
+    { label: 'Yearly Transactions', value: (_r, t) => t.yearlyTransactions },
+    { label: 'Revenue Fee', value: (_r, t) => t.revenueFee },
+    { label: 'FX Margin', value: (_r, t) => t.fxMargin },
+    { label: 'FX Margin %', value: (_r, t) => t.fxMarginPct },
+    { label: 'Margin Fee', value: (_r, t) => t.marginFee },
+    { label: 'Margin Fee %', value: (_r, t) => t.marginFeePct },
+    { label: 'Total Revenue', value: (_r, t) => t.totalRevenue },
+    { label: 'Total Margin', value: (_r, t) => t.totalMargin },
+    { label: 'Margin %', value: (_r, t) => t.marginPct },
+    { label: 'Gross Margin %', value: (_r, t) => t.grossMarginPct },
+    { label: 'Take Rate %', value: (_r, t) => t.takeRatePct },
+    { label: 'Needs Approval', value: (_r, t) => (t.needsApproval ? 'Yes' : 'No') },
+  ]
+
+  /**
+   * Reads from the exact same `visibleRowViews` the table renders/filters/
+   * sorts from, so the export inherits active filters, sort order, and
+   * soft-delete exclusion for free — matching the one part of the old app's
+   * export that was actually correct, rather than re-deriving a separate set.
+   */
+  async function handleExportCorridors() {
+    setIsExporting(true)
+    setBulkActionError(null)
+    try {
+      const workbook = new ExcelJS.Workbook()
+
+      const corridorsSheet = workbook.addWorksheet('Corridors')
+      corridorsSheet.addRow(exportColumns.map((c) => c.label))
+      for (const row of visibleRowViews) {
+        corridorsSheet.addRow(exportColumns.map((c) => c.value(row)))
+      }
+
+      const tiersSheet = workbook.addWorksheet('Tier Breakdown')
+      tiersSheet.addRow(tierBreakdownColumns.map((c) => c.label))
+      for (const row of visibleRowViews) {
+        if (!row.isTiered) continue
+        for (const tier of row.savedRow?.tiers ?? []) {
+          tiersSheet.addRow(tierBreakdownColumns.map((c) => c.value(row, tier)))
+        }
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `Corridors_${(quote?.name ?? 'Export').replace(/[^a-z0-9]+/gi, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setBulkActionError("Couldn't generate the export. Please try again.")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   // Every "Filter Corridors" option list is derived from what's currently
   // displayed (unfiltered by this same filter — options don't narrow
   // themselves away), matching the old app's real modal: it only ever
@@ -1285,6 +1386,9 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                 Restore Deleted ({deletedCorridors!.length})
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={handleExportCorridors} disabled={isExporting}>
+              {isExporting ? 'Exporting…' : 'Download Corridors'}
+            </Button>
           </div>
         )}
         {bulkActionError && (
