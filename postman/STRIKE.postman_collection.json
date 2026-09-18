@@ -769,6 +769,30 @@
           }
         },
         {
+          "name": "Get Quoting Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "summary"
+              ]
+            },
+            "description": "Read-only rollup for the Quoting Summary tab: partner info, contract details, the Setup Fee section, the P&L service's own financialProjections (byte-identical to a direct GET /pnl call — composed internally, never recomputed separately), and a corridor-by-region breakdown (unweighted average fee/spread using each corridor's actual quoted fixedFeeUsd/appliedFxSpread, never a catalog/minimum fallback). Missing partner region/country render as null plus a true flag in completeness, never a fake default. Uses the same saved/non-deleted/positive-volume corridor membership rule as P&L."
+          }
+        },
+        {
           "name": "Delete Quote",
           "request": {
             "method": "DELETE",
