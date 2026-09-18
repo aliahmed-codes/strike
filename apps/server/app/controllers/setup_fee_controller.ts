@@ -72,12 +72,19 @@ export default class SetupFeeController {
       mcfBlockFees: payload.mcfBlockFees ?? [],
       waivedMonths: payload.waivedMonths,
       rebateIncentive: payload.rebateIncentive,
+      rebateType: payload.rebateType ?? null,
       otherFees: payload.otherFees ?? [],
       contractLengthYears: quote!.contractLengthYears ?? 1,
       opportunityType: quote!.opportunityType,
     })
     if (consistencyErrors.length > 0) {
-      return response.unprocessableEntity({ errors: consistencyErrors })
+      // Same { field, message } shape VineJS's own validator errors use, so
+      // the frontend has one error format to handle, not two — a plain
+      // string[] here previously produced unreadable "[object Object]"
+      // output wherever the client expected the VineJS shape.
+      return response.unprocessableEntity({
+        errors: consistencyErrors.map((message) => ({ field: 'general', message })),
+      })
     }
 
     const computed = computeSetupFee({

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type {
   FeeType,
   JoiningFeeBillingType,
@@ -17,14 +17,20 @@ import {
   TOTAL_CONTRACT_VALUE_APPROVAL_THRESHOLD_USD,
   YEAR1_REVENUE_APPROVAL_THRESHOLD_USD,
   computeSetupFeeTotals,
+  hasCommitmentFeeRamp,
   isTotalContractValueBelowThreshold,
   isYear1RevenueBelowThreshold,
+  otherFeeDefault,
+  otherFeeDiffersFromDefault,
+  otherFeeRequiresCurrency,
 } from '@strike/shared'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { getApiErrorMessage, getApiFieldErrors } from '@/lib/api-error'
 import { useCurrencies } from '../api/useReferenceData'
 import { useSetupFee, useUpdateSetupFee } from '../api/useSetupFee'
+import { useQuoteWorkspaceStore } from '../store/useQuoteWorkspaceStore'
 import { CollapsibleSection } from './CollapsibleSection'
 import { FormField } from './FormField'
 import { SimpleSelect } from './SimpleSelect'
@@ -59,11 +65,15 @@ const REBATE_TYPES: { value: RebateType; label: string }[] = [
 
 // Concept label + whether it's a percentage — fixed per concept, matching the
 // old app's real fields (see FEATURES.md Phase 2 investigation notes).
-const OTHER_FEE_META: Record<OtherFeeConcept, { label: string; isPercentage: boolean; hasCurrency?: boolean }> = {
+// Whether a concept needs a currency selected comes from
+// @strike/shared's otherFeeRequiresCurrency, not a field here, so the
+// frontend's required-field indicator can never disagree with the backend's
+// save-time check about which concept(s) it applies to.
+const OTHER_FEE_META: Record<OtherFeeConcept, { label: string; isPercentage: boolean }> = {
   reversal_request: { label: 'Service Request Fee (Reversal Request)', isPercentage: false },
   proof_of_payment: { label: 'Service Request Fee (Proof of Payment)', isPercentage: false },
   emergency_funding: { label: 'Emergency Funding Fee', isPercentage: true },
-  treasury_management: { label: 'Treasury Management Fee', isPercentage: true, hasCurrency: true },
+  treasury_management: { label: 'Treasury Management Fee', isPercentage: true },
   business_hub_platform: { label: 'Business Hub Platform Fee', isPercentage: false },
   post_funding_penalty: { label: 'Post-Funding Line Penalty Fee', isPercentage: true },
   corridor_no_usage: { label: 'Corridor No-Usage Fee', isPercentage: false },
@@ -74,29 +84,61 @@ const OTHER_FEE_META: Record<OtherFeeConcept, { label: string; isPercentage: boo
   currencies_for_treasury: { label: 'Currencies For Treasury Management Fee', isPercentage: false },
 }
 
-function defaultOtherFees(): OtherFee[] {
+// Errors on these fields get attached directly under their own input.
+// Everything else (nested milestone/slot/other-fee rows, and business-rule
+// rejections like "milestones must sum to 100%") is far more work to
+// attribute to one exact input, so it renders as its own readable bullet
+// list instead — see FEATURES.md's Setup Fee save/error fix notes.
+const SCALAR_ERROR_FIELDS = [
+  'quotedPrice',
+  'waivedMonths',
+  'standardCommitmentFee',
+  'commitmentFeeDiscountPct',
+] as const
+
+// Seeded from the real opportunity-type-aware default (via @strike/shared's
+// otherFeeDefault), not a hardcoded 0 — a fresh "New Partner" quote used to
+// falsely show 7 of its 12 Other Fees as "differs from default" the moment
+// it was saved, purely because the frontend's own idea of "default" (always
+// 0) never matched the backend's real one. Any concept flagged `hasCurrency`
+// (currently just Treasury Management) also defaults its currency to USD —
+// matching the old app's real fallback for this field — instead of staying
+// unselected with no visual cue that a choice is expected.
+function defaultOtherFees(opportunityType: string | null, defaultCurrencyId: number | null): OtherFee[] {
   return OTHER_FEE_CONCEPTS.map((conceptCode) => ({
     conceptCode,
-    amount: 0,
+    amount: otherFeeDefault(conceptCode, opportunityType),
     isPercentage: OTHER_FEE_META[conceptCode].isPercentage,
-    currencyId: null,
+    currencyId: otherFeeRequiresCurrency(conceptCode) ? defaultCurrencyId : null,
   }))
 }
 
-function mergeOtherFees(saved: OtherFee[] | undefined): OtherFee[] {
+function mergeOtherFees(
+  saved: OtherFee[] | undefined,
+  opportunityType: string | null,
+  defaultCurrencyId: number | null
+): OtherFee[] {
   const byCode = new Map((saved ?? []).map((f) => [f.conceptCode, f]))
-  return OTHER_FEE_CONCEPTS.map(
-    (conceptCode) =>
-      byCode.get(conceptCode) ?? {
-        conceptCode,
-        amount: 0,
-        isPercentage: OTHER_FEE_META[conceptCode].isPercentage,
-        currencyId: null,
-      }
-  )
+  return OTHER_FEE_CONCEPTS.map((conceptCode) => {
+    const existing = byCode.get(conceptCode)
+    if (existing) {
+      // A row saved before this fix could still have a null currency on a
+      // hasCurrency concept — backfill it the same way a fresh one gets one,
+      // rather than leaving old quotes permanently stuck blank.
+      return existing.currencyId === null && otherFeeRequiresCurrency(conceptCode)
+        ? { ...existing, currencyId: defaultCurrencyId }
+        : existing
+    }
+    return {
+      conceptCode,
+      amount: otherFeeDefault(conceptCode, opportunityType),
+      isPercentage: OTHER_FEE_META[conceptCode].isPercentage,
+      currencyId: otherFeeRequiresCurrency(conceptCode) ? defaultCurrencyId : null,
+    }
+  })
 }
 
-function defaultFields(): SetupFeeFields {
+function defaultFields(opportunityType: string | null, defaultCurrencyId: number | null): SetupFeeFields {
   return {
     feeType: 'setup',
     quotedPrice: 0,
@@ -112,11 +154,15 @@ function defaultFields(): SetupFeeFields {
     waivedMonths: 0,
     rebateIncentive: false,
     rebateType: null,
-    otherFees: defaultOtherFees(),
+    otherFees: defaultOtherFees(opportunityType, defaultCurrencyId),
   }
 }
 
-function fieldsFromSetupFee(setupFee: SetupFee): SetupFeeFields {
+function fieldsFromSetupFee(
+  setupFee: SetupFee,
+  opportunityType: string | null,
+  defaultCurrencyId: number | null
+): SetupFeeFields {
   return {
     feeType: setupFee.feeType,
     quotedPrice: setupFee.quotedPrice,
@@ -132,7 +178,7 @@ function fieldsFromSetupFee(setupFee: SetupFee): SetupFeeFields {
     waivedMonths: setupFee.waivedMonths,
     rebateIncentive: setupFee.rebateIncentive,
     rebateType: setupFee.rebateType ?? null,
-    otherFees: mergeOtherFees(setupFee.otherFees),
+    otherFees: mergeOtherFees(setupFee.otherFees, opportunityType, defaultCurrencyId),
   }
 }
 
@@ -167,30 +213,26 @@ function blockKeysForContract(contractLengthYears: number): { key: string; label
   return blocks
 }
 
-function extractErrorMessage(error: unknown): string {
-  const response = (error as { response?: { data?: { errors?: string[]; message?: string } } })
-    ?.response
-  if (response?.data?.errors?.length) return response.data.errors.join(' ')
-  if (response?.data?.message) return response.data.message
-  return 'Something went wrong saving the setup fee.'
-}
-
 export function SetupFeeTab({
+  tabKey,
   quoteId,
   contractLengthYears,
   opportunityType,
+  updateSetupFee,
 }: {
+  tabKey: string
   quoteId: number | null
   contractLengthYears: number
   opportunityType: string | null
+  updateSetupFee: ReturnType<typeof useUpdateSetupFee>
 }) {
   if (quoteId === null) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-24 text-center">
         <h2 className="text-lg font-semibold">Save the draft first</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          The setup fee is saved against a real pricing request. Click "Save Draft" on the Summary tab
-          first, then come back here.
+          The setup fee is saved against a real pricing request. Click "Save Draft" first, then come
+          back here.
         </p>
       </div>
     )
@@ -198,35 +240,47 @@ export function SetupFeeTab({
 
   return (
     <SetupFeeTabContent
+      tabKey={tabKey}
       quoteId={quoteId}
       contractLengthYears={contractLengthYears}
       opportunityType={opportunityType}
+      updateSetupFee={updateSetupFee}
     />
   )
 }
 
 function SetupFeeTabContent({
+  tabKey,
   quoteId,
   contractLengthYears,
   opportunityType,
+  updateSetupFee,
 }: {
+  tabKey: string
   quoteId: number
   contractLengthYears: number
   opportunityType: string | null
+  updateSetupFee: ReturnType<typeof useUpdateSetupFee>
 }) {
   const { data: setupFee, isLoading } = useSetupFee(quoteId)
   const { data: currencies } = useCurrencies()
-  const updateSetupFee = useUpdateSetupFee(quoteId)
+  const defaultCurrencyId = currencies?.find((c) => c.isoCode3 === 'USD')?.id ?? null
 
-  const [form, setForm] = useState<SetupFeeFields>(defaultFields)
-  const seededQuoteIdRef = useRef<number | null>(null)
+  // The tab's draft form lives in the shared workspace store, not local
+  // component state — so the single "Save Draft" button can see and save
+  // it, and so it survives switching to another tab and back (Radix
+  // unmounts inactive TabsContent by default).
+  const draft = useQuoteWorkspaceStore((s) => s.pendingSetupFee[tabKey])
+  const updateDraftSetupFee = useQuoteWorkspaceStore((s) => s.updateDraftSetupFee)
+  const form =
+    draft ??
+    (setupFee
+      ? fieldsFromSetupFee(setupFee, opportunityType, defaultCurrencyId)
+      : defaultFields(opportunityType, defaultCurrencyId))
 
-  useEffect(() => {
-    if (setupFee !== undefined && seededQuoteIdRef.current !== quoteId) {
-      setForm(setupFee ? fieldsFromSetupFee(setupFee) : defaultFields())
-      seededQuoteIdRef.current = quoteId
-    }
-  }, [setupFee, quoteId])
+  function setForm(updater: (f: SetupFeeFields) => SetupFeeFields) {
+    updateDraftSetupFee(tabKey, updater(form))
+  }
 
   // Live preview, recomputed on every keystroke from the same shared math the
   // backend uses — matches the old app's real-time Year 1/TCV cards instead
@@ -246,6 +300,14 @@ function SetupFeeTabContent({
     [form, contractLengthYears]
   )
   const canUseCustomSchedule = form.quotedPrice > YEAR1_REVENUE_APPROVAL_THRESHOLD_USD
+
+  // Live, real-time indicator for the same rule the backend uses to decide
+  // approval — no round trip needed to see it, matching the Other Fees
+  // indicators above. Upsell bypasses every setup-fee approval check
+  // server-side, so it's suppressed here too.
+  const isUpsellOpportunity = opportunityType?.trim().toLowerCase() === 'upsell'
+  const hasRamp =
+    !isUpsellOpportunity && form.mcfType === 'standard' && hasCommitmentFeeRamp(form.mcfBlockFees ?? [])
 
   // Matches the old app's real-time rule: Custom is only available above the
   // Quoting Price threshold — auto-reset back to the standard schedule the
@@ -277,6 +339,24 @@ function SetupFeeTabContent({
     setWaivedMonthsWarning(false)
     setForm((f) => ({ ...f, waivedMonths: Math.max(0, parsed) }))
   }
+
+  // Readable error split: fields we can attribute to one exact input show
+  // their message right there; everything else (nested rows, business-rule
+  // rejections) is a short bullet list instead of one run-on string.
+  const fieldErrors = getApiFieldErrors(updateSetupFee.error) ?? []
+  const scalarErrors = new Map(
+    fieldErrors
+      .filter((e) => (SCALAR_ERROR_FIELDS as readonly string[]).includes(e.field))
+      .map((e) => [e.field, e.message])
+  )
+  const otherErrorMessages =
+    fieldErrors.length > 0
+      ? fieldErrors
+          .filter((e) => !(SCALAR_ERROR_FIELDS as readonly string[]).includes(e.field))
+          .map((e) => e.message)
+      : updateSetupFee.isError
+        ? [getApiErrorMessage(updateSetupFee.error)]
+        : []
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading setup fee…</p>
@@ -339,15 +419,15 @@ function SetupFeeTabContent({
     })
   }
 
-  function handleSave() {
-    updateSetupFee.mutate(form)
-  }
-
   return (
     <div className="space-y-6">
-      {updateSetupFee.isError && (
+      {otherErrorMessages.length > 0 && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          {extractErrorMessage(updateSetupFee.error)}
+          <ul className="list-disc space-y-0.5 pl-5">
+            {otherErrorMessages.map((message, i) => (
+              <li key={i}>{message}</li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -378,8 +458,12 @@ function SetupFeeTabContent({
             <Input
               type="number"
               value={form.quotedPrice}
+              aria-invalid={!!scalarErrors.get('quotedPrice')}
               onChange={(e) => handleQuotedPriceChange(e.target.value)}
             />
+            {scalarErrors.get('quotedPrice') && (
+              <p className="text-xs text-destructive">{scalarErrors.get('quotedPrice')}</p>
+            )}
           </FormField>
           <FormField
             label="Payment Schedule"
@@ -496,7 +580,7 @@ function SetupFeeTabContent({
           <FormField
             label="Waived Months"
             caption={
-              waivedMonthsWarning
+              waivedMonthsWarning || scalarErrors.get('waivedMonths')
                 ? undefined
                 : `0-${MAX_WAIVED_MONTHS}; 4 or more requires approval`
             }
@@ -506,11 +590,14 @@ function SetupFeeTabContent({
               min={0}
               max={MAX_WAIVED_MONTHS}
               value={form.waivedMonths}
+              aria-invalid={waivedMonthsWarning || !!scalarErrors.get('waivedMonths')}
               onChange={(e) => handleWaivedMonthsChange(e.target.value)}
-              className={waivedMonthsWarning ? 'border-destructive' : undefined}
             />
             {waivedMonthsWarning && (
               <p className="text-xs text-destructive">Max {MAX_WAIVED_MONTHS} months allowed.</p>
+            )}
+            {!waivedMonthsWarning && scalarErrors.get('waivedMonths') && (
+              <p className="text-xs text-destructive">{scalarErrors.get('waivedMonths')}</p>
             )}
           </FormField>
 
@@ -520,19 +607,27 @@ function SetupFeeTabContent({
                 <Input
                   type="number"
                   value={form.standardCommitmentFee}
+                  aria-invalid={!!scalarErrors.get('standardCommitmentFee')}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, standardCommitmentFee: Number(e.target.value) }))
                   }
                 />
+                {scalarErrors.get('standardCommitmentFee') && (
+                  <p className="text-xs text-destructive">{scalarErrors.get('standardCommitmentFee')}</p>
+                )}
               </FormField>
               <FormField label="Commitment Fee Discount %">
                 <Input
                   type="number"
                   value={form.commitmentFeeDiscountPct}
+                  aria-invalid={!!scalarErrors.get('commitmentFeeDiscountPct')}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, commitmentFeeDiscountPct: Number(e.target.value) }))
                   }
                 />
+                {scalarErrors.get('commitmentFeeDiscountPct') && (
+                  <p className="text-xs text-destructive">{scalarErrors.get('commitmentFeeDiscountPct')}</p>
+                )}
               </FormField>
             </>
           )}
@@ -577,6 +672,11 @@ function SetupFeeTabContent({
                 (optional — leave blank to use the fee above for that period)
               </span>
             </p>
+            {hasRamp && (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                These per-period fees differ from each other — needs approval
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {blockKeysForContract(contractLengthYears).map(({ key, label }) => {
                 const override = (form.mcfBlockFees ?? []).find((b) => b.blockKey === key)
@@ -600,6 +700,14 @@ function SetupFeeTabContent({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {(form.otherFees ?? []).map((fee) => {
             const meta = OTHER_FEE_META[fee.conceptCode]
+            // Live, per-field indicator — computed with the exact same
+            // shared function the backend uses to decide approval, so it
+            // can never show a false positive/negative relative to what
+            // Save will actually flag. Upsell bypasses every setup-fee
+            // approval check server-side, so it never shows here either.
+            const isUpsell = opportunityType?.trim().toLowerCase() === 'upsell'
+            const differsFromDefault =
+              !isUpsell && otherFeeDiffersFromDefault(fee.conceptCode, fee.amount, opportunityType)
             return (
               <FormField key={fee.conceptCode} label={meta.label}>
                 <div className="flex items-center gap-2">
@@ -607,17 +715,33 @@ function SetupFeeTabContent({
                     type="number"
                     step={meta.isPercentage ? '0.01' : '1'}
                     value={fee.amount}
+                    aria-invalid={differsFromDefault}
                     onChange={(e) => updateOtherFee(fee.conceptCode, { amount: Number(e.target.value) })}
                   />
                   <span className="text-sm text-muted-foreground">{meta.isPercentage ? '%' : '$'}</span>
                 </div>
-                {meta.hasCurrency && (
-                  <SimpleSelect
-                    value={fee.currencyId ? String(fee.currencyId) : ''}
-                    onValueChange={(v) => updateOtherFee(fee.conceptCode, { currencyId: Number(v) })}
-                    options={(currencies ?? []).map((c) => ({ value: String(c.id), label: c.isoCode3 }))}
-                    placeholder="Currency"
-                  />
+                {differsFromDefault && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Differs from the default of{' '}
+                    {meta.isPercentage
+                      ? `${otherFeeDefault(fee.conceptCode, opportunityType)}%`
+                      : `$${otherFeeDefault(fee.conceptCode, opportunityType)}`}{' '}
+                    — needs approval
+                  </p>
+                )}
+                {otherFeeRequiresCurrency(fee.conceptCode) && (
+                  <>
+                    <SimpleSelect
+                      value={fee.currencyId ? String(fee.currencyId) : ''}
+                      onValueChange={(v) => updateOtherFee(fee.conceptCode, { currencyId: Number(v) })}
+                      options={(currencies ?? []).map((c) => ({ value: String(c.id), label: c.isoCode3 }))}
+                      placeholder="Currency"
+                      ariaInvalid={fee.currencyId === null}
+                    />
+                    {fee.currencyId === null && (
+                      <p className="text-xs text-destructive">A currency is required for this fee.</p>
+                    )}
+                  </>
                 )}
               </FormField>
             )
@@ -646,7 +770,11 @@ function SetupFeeTabContent({
                 value={form.rebateType ?? ''}
                 onValueChange={(v) => setForm((f) => ({ ...f, rebateType: v as RebateType }))}
                 options={REBATE_TYPES}
+                ariaInvalid={form.rebateType === null}
               />
+              {form.rebateType === null && (
+                <p className="text-xs text-destructive">Required when Rebate Incentive is enabled.</p>
+              )}
             </FormField>
           )}
         </div>
@@ -654,7 +782,8 @@ function SetupFeeTabContent({
 
       <CollapsibleSection title="Computed Summary" defaultOpen>
         <p className="mb-3 text-xs text-muted-foreground">
-          Updates live as you edit — matches what the backend will compute on save.
+          Updates live as you edit — matches what the backend will compute on save. Click "Save
+          Draft" at the top of the page to save this along with everything else.
         </p>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <SummaryStat label="Final Commitment Fee" value={liveTotals.finalCommitmentFee} />
@@ -683,10 +812,6 @@ function SetupFeeTabContent({
           standard policy for existing partners.
         </p>
       )}
-
-      <Button onClick={handleSave} disabled={updateSetupFee.isPending}>
-        {updateSetupFee.isPending ? 'Saving…' : 'Save Setup Fee'}
-      </Button>
     </div>
   )
 }

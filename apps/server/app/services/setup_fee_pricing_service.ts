@@ -4,6 +4,10 @@ import {
   WAIVED_MONTHS_APPROVAL_THRESHOLD,
   YEAR1_REVENUE_APPROVAL_THRESHOLD_USD,
   computeSetupFeeTotals,
+  hasCommitmentFeeRamp,
+  otherFeeDefault,
+  otherFeeDiffersFromDefault,
+  otherFeeRequiresCurrency,
 } from '@strike/shared'
 
 /**
@@ -30,6 +34,9 @@ export {
   TOTAL_CONTRACT_VALUE_APPROVAL_THRESHOLD_USD,
   WAIVED_MONTHS_APPROVAL_THRESHOLD,
   YEAR1_REVENUE_APPROVAL_THRESHOLD_USD,
+  hasCommitmentFeeRamp,
+  otherFeeDefault,
+  otherFeeDiffersFromDefault,
 }
 
 export type FeeType = 'setup' | 'network'
@@ -75,6 +82,7 @@ export interface SetupFeeInputs {
   mcfBlockFees: McfBlockFeeInput[]
   waivedMonths: number
   rebateIncentive: boolean
+  rebateType?: string | null
   otherFees: OtherFeeInput[]
   contractLengthYears: number
   opportunityType: string | null
@@ -90,37 +98,13 @@ export interface SetupFeeComputed {
   approvalReasons: string[]
 }
 
-/** The old app's real "New Partner" defaults — every other Opportunity Type resets all 12 to 0. */
-const NEW_PARTNER_OTHER_FEE_DEFAULTS: Record<string, number> = {
-  reversal_request: 10,
-  proof_of_payment: 10,
-  emergency_funding: 0.3,
-  treasury_management: 0.1,
-  business_hub_platform: 500,
-  corridor_no_usage: 200,
-  bulk_currency_conversion: 200,
-  post_funding_penalty: 0,
-  white_glove: 0,
-  stablecoin_prefunding: 0,
-  digital_asset_icp_setup: 0,
-  currencies_for_treasury: 0,
-}
-
 function round(value: number, decimals: number): number {
   const factor = 10 ** decimals
   return Math.round(value * factor) / factor
 }
 
-function isNewPartner(opportunityType: string | null): boolean {
-  return (opportunityType ?? '').trim().toLowerCase() === 'new partner'
-}
-
 function isUpsell(opportunityType: string | null): boolean {
   return (opportunityType ?? '').trim().toLowerCase() === 'upsell'
-}
-
-function otherFeeDefault(conceptCode: string, opportunityType: string | null): number {
-  return isNewPartner(opportunityType) ? (NEW_PARTNER_OTHER_FEE_DEFAULTS[conceptCode] ?? 0) : 0
 }
 
 /**
@@ -149,6 +133,16 @@ export function validateSetupFeeConsistency(inputs: SetupFeeInputs): string[] {
       errors.push(
         `Principal-based commitment fee requires ${requiredSlots} slot(s) for a ${inputs.contractLengthYears}-year contract.`
       )
+    }
+  }
+
+  if (inputs.rebateIncentive && !inputs.rebateType) {
+    errors.push('Rebate Type is required when Rebate Incentive is enabled.')
+  }
+
+  for (const fee of inputs.otherFees) {
+    if (otherFeeRequiresCurrency(fee.conceptCode) && !fee.currencyId) {
+      errors.push(`"${fee.conceptCode}" fee requires a currency.`)
     }
   }
 
@@ -203,19 +197,13 @@ export function computeSetupFee(inputs: SetupFeeInputs): SetupFeeComputed {
     // Every other-fee concept is checked against its Opportunity-Type
     // default — the old app only checked 5 of its 12 equivalents.
     for (const fee of inputs.otherFees) {
-      const defaultAmount = otherFeeDefault(fee.conceptCode, inputs.opportunityType)
-      if (Math.abs(fee.amount - defaultAmount) > 0.01) {
+      if (otherFeeDiffersFromDefault(fee.conceptCode, fee.amount, inputs.opportunityType)) {
         approvalReasons.push(`"${fee.conceptCode}" fee differs from its default.`)
       }
     }
 
-    if (inputs.mcfType === 'standard' && inputs.mcfBlockFees.length > 1) {
-      const distinctFees = new Set(inputs.mcfBlockFees.map((b) => round(b.commitmentFee, 2)))
-      if (distinctFees.size > 1) {
-        approvalReasons.push(
-          'Commitment fee ramps up/down across the contract — requires approval.'
-        )
-      }
+    if (inputs.mcfType === 'standard' && hasCommitmentFeeRamp(inputs.mcfBlockFees)) {
+      approvalReasons.push('Commitment fee ramps up/down across the contract — requires approval.')
     }
   }
 

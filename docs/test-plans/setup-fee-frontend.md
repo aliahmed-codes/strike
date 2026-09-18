@@ -42,28 +42,38 @@ Covers the Setup Fee tab UI: all 5 sections, real-time validation/preview (match
 | D4 | Lower Quoting Price to `10000` | Both cards should immediately flip back to red with the correct numbers — again, live, before any Save |
 | D5 | Switch Commitment Fee Type to "Volume / Principal Based" and fill in the 2-3 slots with real numbers | Computed Summary updates live using the principal-slot math instead |
 
-## E. Save still works and matches the live preview
+## E. One save button — "Save Draft" persists Setup Fee too (the bug this fixed)
+
+There is now only **one** save action on this page: **"Save Draft"** at the top. The old separate
+"Save Setup Fee" button is gone — this is what previously caused edits to silently not persist if
+you clicked "Save Draft" instead of the (now-removed) tab-local button.
 
 | # | Step | Expected result |
 |---|------|------------------|
-| E1 | With the values from D2/D3 still in place, click "Save Setup Fee" | Saves successfully; the numbers shown after save match exactly what the live preview showed beforehand |
-| E2 | Refresh the page, reopen Setup Fee | The saved values reload correctly into the form, and the live preview immediately shows the same numbers again |
+| E1 | Look at the whole page | Exactly one button anywhere reads "Save"/"Save Draft" — there is no separate Setup Fee save button |
+| E2 | With the values from D2/D3 still in place, look at the top of the page | "You have unsaved changes" banner is showing (it now reflects Setup Fee edits, not just header edits) |
+| E3 | Click **"Save Draft"** | Saves successfully; the numbers shown after save match exactly what the live preview showed beforehand; the "unsaved changes" banner disappears |
+| E4 | Refresh the page (full reload), reopen Setup Fee | The saved values reload correctly into the form, and the live preview immediately shows the same numbers again — **this is the exact scenario that used to lose data** |
+| E5 | Switch to another tab (e.g. Summary) and back to Setup Fee **without saving** an in-progress edit | The edit is still there — it survives switching tabs now, not just full reloads |
 
-## F. Regression (existing sections still work)
+## F. Readable errors — one bullet per issue, not a run-on blob
 
 | # | Step | Expected result |
 |---|------|------------------|
 | F1 | Add 2 custom payment milestones summing to 100% | Saves fine (green "100% of 100%" indicator) |
-| F2 | Add 2 custom milestones summing to 90% and try to Save | Backend rejects with a visible error banner mentioning "exactly 100%" |
-| F3 | Fill in a few "Other Fees" values, save, reload | Values persist correctly, including the Treasury Management currency picker |
-| F4 | Set Rebate Incentive to YES | Rebate Type dropdown appears |
-| F5 | `cd apps/server && node ace test` | All 57 tests pass |
-| F6 | `npx turbo run build typecheck lint test` from repo root | All 4 workspaces pass |
+| F2 | Add 2 custom milestones summing to 90% and click **Save Draft** | A small red box appears with a bulleted list; it reads exactly `Custom payment schedule must total exactly 100% (got 90%).` — **not** `[object Object]` or any garbled text |
+| F3 | Type an out-of-range value directly into a field with a real backend name (if you can trigger a 422 on e.g. Quoting Price) | That field's own red caption shows the message right under the input, not just in the top banner |
+| F4 | Fill in a few "Other Fees" values, save, reload | Values persist correctly, including the Treasury Management currency picker |
+| F5 | Set Rebate Incentive to YES | Rebate Type dropdown appears |
+| F6 | `cd apps/server && node ace test` | All 148 tests pass |
+| F7 | `npx turbo run build typecheck lint` from repo root | All 3 workspaces pass |
 
 ## Sign-off
 
 - [ ] A–F all pass
 - [ ] The threshold cards and computed summary genuinely update live, without needing to click Save first
+- [ ] Only one Save button exists, and it actually persists Setup Fee edits, verified across a full reload
+- [ ] A validation failure shows a specific, readable message — never `[object Object]`
 - [ ] Ready to commit
 
 ---

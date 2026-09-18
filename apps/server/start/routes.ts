@@ -14,6 +14,7 @@ const ReferenceDataController = () => import('#controllers/reference_data_contro
 const QuotesController = () => import('#controllers/quotes_controller')
 const QuoteCorridorsController = () => import('#controllers/quote_corridors_controller')
 const SetupFeeController = () => import('#controllers/setup_fee_controller')
+const QuotePnlController = () => import('#controllers/quote_pnl_controller')
 
 router.get('/', async () => {
   return {
@@ -61,6 +62,9 @@ router
 
     router.get('/:quoteId/setup-fee', [SetupFeeController, 'show'])
     router.put('/:quoteId/setup-fee', [SetupFeeController, 'update'])
+
+    router.get('/:quoteId/pnl', [QuotePnlController, 'show'])
+    router.put('/:quoteId/pnl', [QuotePnlController, 'update'])
   })
   .prefix('/quotes')
   .use(middleware.auth())

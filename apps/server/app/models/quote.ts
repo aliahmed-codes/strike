@@ -9,6 +9,7 @@ import IcpNode from '#models/icp_node'
 import Currency from '#models/currency'
 import QuoteCorridor from '#models/quote_corridor'
 import QuoteSetupFee from '#models/quote_setup_fee'
+import QuotePnlInput from '#models/quote_pnl_input'
 
 export type QuoteStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'closed'
 
@@ -154,6 +155,9 @@ export default class Quote extends BaseModel {
 
   @hasOne(() => QuoteSetupFee)
   declare setupFee: HasOne<typeof QuoteSetupFee>
+
+  @hasOne(() => QuotePnlInput)
+  declare pnlInput: HasOne<typeof QuotePnlInput>
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

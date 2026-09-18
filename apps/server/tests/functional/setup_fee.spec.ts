@@ -1,6 +1,7 @@
 import { test } from '@japa/runner'
 import User from '#models/user'
 import Quote from '#models/quote'
+import Currency from '#models/currency'
 
 async function createUserWithToken(role: 'admin' | 'sales' | 'viewer' = 'sales') {
   const user = await User.create({
@@ -27,26 +28,43 @@ async function createDraftQuote(
   })
 }
 
-const validPayload = {
-  feeType: 'setup',
-  quotedPrice: 100_000,
-  paymentSchedule: 'full',
-  joiningFeeBillingType: 'at_signing',
-  mcfType: 'standard',
-  mcfBillingStart: 'at_signing',
-  standardCommitmentFee: 5000,
-  commitmentFeeDiscountPct: 0,
-  waivedMonths: 0,
-  rebateIncentive: false,
-  otherFees: [
-    { conceptCode: 'reversal_request', amount: 10, isPercentage: false },
-    { conceptCode: 'proof_of_payment', amount: 10, isPercentage: false },
-    { conceptCode: 'emergency_funding', amount: 0.3, isPercentage: true },
-    { conceptCode: 'treasury_management', amount: 0.1, isPercentage: true },
-    { conceptCode: 'business_hub_platform', amount: 500, isPercentage: false },
-    { conceptCode: 'corridor_no_usage', amount: 200, isPercentage: false },
-    { conceptCode: 'bulk_currency_conversion', amount: 200, isPercentage: false },
-  ],
+async function createCurrency() {
+  return Currency.create({
+    isoCode3: 'TU1',
+    name: 'Test Currency',
+    decimalPlaces: 2,
+    isSource: true,
+    isFunding: true,
+    isPayout: true,
+    isFee: true,
+    isHard: true,
+    isPegged: false,
+  })
+}
+
+/** Treasury Management is the one "other fee" concept that requires a currency. */
+function buildValidPayload(currencyId: number) {
+  return {
+    feeType: 'setup',
+    quotedPrice: 100_000,
+    paymentSchedule: 'full',
+    joiningFeeBillingType: 'at_signing',
+    mcfType: 'standard',
+    mcfBillingStart: 'at_signing',
+    standardCommitmentFee: 5000,
+    commitmentFeeDiscountPct: 0,
+    waivedMonths: 0,
+    rebateIncentive: false,
+    otherFees: [
+      { conceptCode: 'reversal_request', amount: 10, isPercentage: false },
+      { conceptCode: 'proof_of_payment', amount: 10, isPercentage: false },
+      { conceptCode: 'emergency_funding', amount: 0.3, isPercentage: true },
+      { conceptCode: 'treasury_management', amount: 0.1, isPercentage: true, currencyId },
+      { conceptCode: 'business_hub_platform', amount: 500, isPercentage: false },
+      { conceptCode: 'corridor_no_usage', amount: 200, isPercentage: false },
+      { conceptCode: 'bulk_currency_conversion', amount: 200, isPercentage: false },
+    ],
+  }
 }
 
 test.group('Setup Fee', () => {
@@ -54,7 +72,7 @@ test.group('Setup Fee', () => {
     const getResponse = await client.get('/quotes/1/setup-fee')
     getResponse.assertStatus(401)
 
-    const putResponse = await client.put('/quotes/1/setup-fee').json(validPayload)
+    const putResponse = await client.put('/quotes/1/setup-fee').json(buildValidPayload(1))
     putResponse.assertStatus(401)
   })
 
@@ -85,11 +103,12 @@ test.group('Setup Fee', () => {
   test('saves a valid setup fee and computes totals on the backend', async ({ client, assert }) => {
     const { token, user } = await createUserWithToken()
     const quote = await createDraftQuote(user.id)
+    const currency = await createCurrency()
 
     const response = await client
       .put(`/quotes/${quote.id}/setup-fee`)
       .header('Authorization', `Bearer ${token}`)
-      .json(validPayload)
+      .json(buildValidPayload(currency.id))
 
     response.assertStatus(200)
     const body = response.body().setupFee
@@ -107,11 +126,12 @@ test.group('Setup Fee', () => {
     const quote = await createDraftQuote(user.id)
     quote.status = 'submitted'
     await quote.save()
+    const currency = await createCurrency()
 
     const response = await client
       .put(`/quotes/${quote.id}/setup-fee`)
       .header('Authorization', `Bearer ${token}`)
-      .json(validPayload)
+      .json(buildValidPayload(currency.id))
 
     response.assertStatus(409)
   })
@@ -119,11 +139,12 @@ test.group('Setup Fee', () => {
   test('rejects waived months above the real cap of 6', async ({ client }) => {
     const { token, user } = await createUserWithToken()
     const quote = await createDraftQuote(user.id)
+    const currency = await createCurrency()
 
     const response = await client
       .put(`/quotes/${quote.id}/setup-fee`)
       .header('Authorization', `Bearer ${token}`)
-      .json({ ...validPayload, waivedMonths: 24 })
+      .json({ ...buildValidPayload(currency.id), waivedMonths: 24 })
 
     response.assertStatus(422)
   })
@@ -134,12 +155,13 @@ test.group('Setup Fee', () => {
   }) => {
     const { token, user } = await createUserWithToken()
     const quote = await createDraftQuote(user.id)
+    const currency = await createCurrency()
 
     const response = await client
       .put(`/quotes/${quote.id}/setup-fee`)
       .header('Authorization', `Bearer ${token}`)
       .json({
-        ...validPayload,
+        ...buildValidPayload(currency.id),
         paymentSchedule: 'custom',
         paymentMilestones: [
           { milestone: 'On Signature', percentage: 50 },
@@ -148,18 +170,20 @@ test.group('Setup Fee', () => {
       })
 
     response.assertStatus(422)
-    assert.include(response.body().errors[0], 'exactly 100%')
+    assert.equal(response.body().errors[0].field, 'general')
+    assert.include(response.body().errors[0].message, 'exactly 100%')
   })
 
   test('rejects a principal-based commitment fee missing required slots', async ({ client }) => {
     const { token, user } = await createUserWithToken()
     const quote = await createDraftQuote(user.id)
+    const currency = await createCurrency()
 
     const response = await client
       .put(`/quotes/${quote.id}/setup-fee`)
       .header('Authorization', `Bearer ${token}`)
       .json({
-        ...validPayload,
+        ...buildValidPayload(currency.id),
         mcfType: 'principal',
         mcfPrincipalSlots: [
           {
@@ -182,12 +206,13 @@ test.group('Setup Fee', () => {
   }) => {
     const { token, user } = await createUserWithToken()
     const quote = await createDraftQuote(user.id)
+    const currency = await createCurrency()
 
     const response = await client
       .put(`/quotes/${quote.id}/setup-fee`)
       .header('Authorization', `Bearer ${token}`)
       .json({
-        ...validPayload,
+        ...buildValidPayload(currency.id),
         otherFees: [{ conceptCode: 'reversal_request', amount: 999, isPercentage: false }],
       })
 
@@ -197,17 +222,58 @@ test.group('Setup Fee', () => {
     assert.isTrue(body.approvalReasons.some((r: string) => r.includes('reversal_request')))
   })
 
+  test('rejects Treasury Management Fee with no currency selected', async ({ client, assert }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await createDraftQuote(user.id)
+    const currency = await createCurrency()
+
+    const response = await client
+      .put(`/quotes/${quote.id}/setup-fee`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        ...buildValidPayload(currency.id),
+        otherFees: [{ conceptCode: 'treasury_management', amount: 0.1, isPercentage: true }],
+      })
+
+    response.assertStatus(422)
+    assert.include(response.body().errors[0].message, 'treasury_management')
+  })
+
+  test('rejects Rebate Incentive enabled with no Rebate Type selected', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await createDraftQuote(user.id)
+    const currency = await createCurrency()
+
+    const response = await client
+      .put(`/quotes/${quote.id}/setup-fee`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ ...buildValidPayload(currency.id), rebateIncentive: true })
+
+    response.assertStatus(422)
+    assert.include(response.body().errors[0].message, 'Rebate Type')
+  })
+
   test('Upsell opportunity type bypasses every setup-fee approval check', async ({
     client,
     assert,
   }) => {
     const { token, user } = await createUserWithToken()
     const quote = await createDraftQuote(user.id, { opportunityType: 'Upsell' })
+    const currency = await createCurrency()
 
     const response = await client
       .put(`/quotes/${quote.id}/setup-fee`)
       .header('Authorization', `Bearer ${token}`)
-      .json({ ...validPayload, quotedPrice: 0, standardCommitmentFee: 0, rebateIncentive: true })
+      .json({
+        ...buildValidPayload(currency.id),
+        quotedPrice: 0,
+        standardCommitmentFee: 0,
+        rebateIncentive: true,
+        rebateType: 'volume',
+      })
 
     response.assertStatus(200)
     const body = response.body().setupFee

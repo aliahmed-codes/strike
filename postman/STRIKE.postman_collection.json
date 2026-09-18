@@ -12,15 +12,25 @@
           "name": "Login",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"ada@example.com\",\n  \"password\": \"password123\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/auth/login",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
             "description": "Logs in an existing user with email + password. Returns the user's public info and a new bearer token valid for 30 days.\n\nFails with 400 for an unknown email or an incorrect password (same error either way, so it can't be used to discover registered emails)."
           },
@@ -45,11 +55,21 @@
           "name": "Me",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/auth/me",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "me"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
             },
             "description": "Returns the currently authenticated user, identified by the bearer token saved from Login.\n\nFails with 401 if the token is missing, invalid, or has been logged out."
           },
@@ -74,11 +94,21 @@
           "name": "List Countries",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/reference/countries",
-              "host": ["{{base_url}}"],
-              "path": ["reference", "countries"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reference",
+                "countries"
+              ]
             },
             "description": "Read-only lookup data seeded from the old project's reference tables. Similar endpoints exist for /reference/regions, /currencies, /use-cases, /integration-types, and /icp-nodes."
           }
@@ -87,11 +117,21 @@
           "name": "List Corridors (catalog)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/reference/corridors",
-              "host": ["{{base_url}}"],
-              "path": ["reference", "corridors"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reference",
+                "corridors"
+              ]
             },
             "description": "The master corridor catalog a user picks from when adding a corridor to a quote. Supports optional ?countryId=&serviceCode=&transactionTypeCode= filters."
           },
@@ -114,20 +154,63 @@
           "name": "Corridor Facets",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/reference/corridors/facets?regionIds=&countryIds=&serviceCodes=&transactionTypeCodes=&payoutCurrencyIds=&payerCodes=&hideUsdSwift=&restrictToUseCaseAllowedCountries=",
-              "host": ["{{base_url}}"],
-              "path": ["reference", "corridors", "facets"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reference",
+                "corridors",
+                "facets"
+              ],
               "query": [
-                { "key": "regionIds", "value": "", "description": "Comma-separated region ids, e.g. 1,2" },
-                { "key": "countryIds", "value": "", "description": "Comma-separated country ids" },
-                { "key": "serviceCodes", "value": "", "description": "Comma-separated service codes" },
-                { "key": "transactionTypeCodes", "value": "", "description": "Comma-separated transaction type codes" },
-                { "key": "payoutCurrencyIds", "value": "", "description": "Comma-separated currency ids" },
-                { "key": "payerCodes", "value": "", "description": "Comma-separated payer codes" },
-                { "key": "hideUsdSwift", "value": "", "description": "true to exclude any payer containing \"swift wire transfer\" from every count" },
-                { "key": "restrictToUseCaseAllowedCountries", "value": "", "description": "true to restrict the whole picker to the old app's compliance country allow-list (mirrors selecting \"Last Mile Payout\"/\"Account Top-Up\" as a use case)" }
+                {
+                  "key": "regionIds",
+                  "value": "",
+                  "description": "Comma-separated region ids, e.g. 1,2"
+                },
+                {
+                  "key": "countryIds",
+                  "value": "",
+                  "description": "Comma-separated country ids"
+                },
+                {
+                  "key": "serviceCodes",
+                  "value": "",
+                  "description": "Comma-separated service codes"
+                },
+                {
+                  "key": "transactionTypeCodes",
+                  "value": "",
+                  "description": "Comma-separated transaction type codes"
+                },
+                {
+                  "key": "payoutCurrencyIds",
+                  "value": "",
+                  "description": "Comma-separated currency ids"
+                },
+                {
+                  "key": "payerCodes",
+                  "value": "",
+                  "description": "Comma-separated payer codes"
+                },
+                {
+                  "key": "hideUsdSwift",
+                  "value": "",
+                  "description": "true to exclude any payer containing \"swift wire transfer\" from every count"
+                },
+                {
+                  "key": "restrictToUseCaseAllowedCountries",
+                  "value": "",
+                  "description": "true to restrict the whole picker to the old app's compliance country allow-list (mirrors selecting \"Last Mile Payout\"/\"Account Top-Up\" as a use case)"
+                }
               ]
             },
             "description": "Powers the \"Corridors to Offer\" picker: per-dimension counts (regions, countries, services, transaction types, payout currencies, payers) plus totalAvailable/totalMatched, given any combination of the query filters. Every dimension supports multiple selected values (OR within a dimension, AND across dimensions). Prefer repeated, URL-encoded bracket-array parameters, for example countryIds[]=44&countryIds[]=47. Legacy comma-separated lists remain supported. For payer names containing commas or ampersands, use payerCodes[]=Bank%2C%20Branch%20%26%20Partners so punctuation remains part of one value. Both this endpoint and GET /reference/corridors/matching use the same parser and reject malformed filters with 422. Empty parameters clear a filter. The matching endpoint returns { corridors: [...] }, capped at 200 rows; this endpoint supplies the uncapped totalMatched. Region is a one-way filter: it narrows every other dimension but is never itself narrowed, even by its own filter — the other five dimensions narrow each other mutually (never by their own filter). Every panel always lists every value that exists, even ones with count 0, so the UI can disable rather than remove them."
@@ -143,14 +226,28 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Habib Bank\",\n  \"opportunityType\": \"New partner\",\n  \"fundingCurrencyIds\": [1, 2],\n  \"sourceCurrencyIds\": [1],\n  \"useCaseIds\": [1],\n  \"corridorFilterRegionIds\": [1],\n  \"corridorFilterCountryIds\": [],\n  \"corridorFilterServiceCodes\": [],\n  \"corridorFilterTransactionTypeCodes\": [],\n  \"corridorFilterPayoutCurrencyIds\": [],\n  \"corridorFilterPayerCodes\": [],\n  \"corridorFilterHideUsdSwift\": false\n}"
             },
-            "url": { "raw": "{{base_url}}/quotes", "host": ["{{base_url}}"], "path": ["quotes"] },
+            "url": {
+              "raw": "{{base_url}}/quotes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes"
+              ]
+            },
             "description": "Creates a new quote, owned by the current user, always starting in 'draft' status.\n\nMost fields are optional besides name — this example shows the multi-value ones (a quote can have several funding/source currencies and use cases, matching the old app exactly). Other optional fields: partnerCountryId, integrationTypeId, icpLevel1Id/icpLevel2Id/icpLevel3Id, contractLengthYears, waivedMonths, partnerPrCode, showFxSourceInContract, showFxSpreadInContract, fxModel, selectedPricingStrategy, selectedFxPricing, defaultFeeCurrencyId. Currency/use-case ids depend on what's seeded — check \"List Countries\"/\"Currencies\" first if these don't exist in your database.\n\nThe corridorFilter* fields are the \"Corridors to Offer\" facet-filter selection (Region/Country/Service/Transaction Type/Payout Currency/Payer, plus a Hide USD SWIFT flag) — they drive the Pricing tab's live preview rows and default to empty arrays / false when omitted."
           },
           "event": [
@@ -170,8 +267,21 @@
           "name": "List Quotes",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": { "raw": "{{base_url}}/quotes", "host": ["{{base_url}}"], "path": ["quotes"] },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes"
+              ]
+            },
             "description": "Lists the current user's own quotes (an admin sees every quote)."
           }
         },
@@ -179,11 +289,21 @@
           "name": "Show Quote",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}"
+              ]
             },
             "description": "Returns the full quote (with its corridors) plus backend-computed totals (revenue, margin, take rate) — the client never computes these itself."
           }
@@ -193,14 +313,28 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Habib Bank (Renamed)\"\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Habib Bank (Renamed)\"\n}"
+            },
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}"
+              ]
             },
             "description": "Only allowed while the quote is still in 'draft' status — fails with 409 once submitted."
           }
@@ -210,8 +344,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -219,8 +359,14 @@
             },
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}/corridors",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}", "corridors"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "corridors"
+              ]
             },
             "description": "Adds a corridor from the catalog to the quote. The backend computes revenue/FX margin/margin fee/gross margin/take-rate using the corridor's real cost/FX-source master data, and flags approval via two independent checks: needs_financial_approval (margin/pricing rules, with financial_approval_reasons) and needs_network_approval (a lookup on the corridor catalog's own Need Approval/Internal/Central Bank fields, with network_approval_reasons) — needs_approval/approval_reasons remain the combined OR of both for backward compatibility. None of this is trusted from the request body. Run \"List Corridors (catalog)\" first to populate {{corridor_id}}. Optionally accepts a `fundingCurrencyId` — the same corridor can be added once per funding currency on the quote (Phase B); repeating this request unchanged (same corridor, same funding currency or none) returns 409. See \"Add Corridor to Quote (Different Funding Currency)\"."
           },
@@ -242,8 +388,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -251,8 +403,14 @@
             },
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}/corridors",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}", "corridors"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "corridors"
+              ]
             },
             "description": "Phase B: the same corridor, added again under a different `{{funding_currency_id}}` than any already used for it on this quote — succeeds (201) as an independent row, rather than the 409 you'd get from repeating \"Add Corridor to Quote\" unchanged. Run \"List Currencies\" first to populate {{funding_currency_id}}."
           },
@@ -261,7 +419,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Created (201)', () => pm.response.to.have.status(201));"]
+                "exec": [
+                  "pm.test('Created (201)', () => pm.response.to.have.status(201));"
+                ]
               }
             }
           ]
@@ -271,8 +431,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -280,8 +446,14 @@
             },
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}/corridors",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}", "corridors"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "corridors"
+              ]
             },
             "description": "Splits a corridor's yearly volume across up to 3 tiers (each with its own fixed fee/variable fee %/FX spread), with whatever volume isn't assigned to a tier pricing at the corridor's own standard fields above. Tier 1 = smallest discount, Tier 3 = biggest. Tier volumes can never sum to more than yearlyVolumeUsd — a 422 is returned otherwise. Response includes a `tiers` array with each tier's own computed revenue/margin/approval, plus the corridor's top-level fields (revenueFee, totalRevenue, needsApproval, etc.) as the combined total across the standard remainder and every tier. Each tier's transaction count is derived from its volume ÷ atvUsd, not entered directly."
           }
@@ -291,14 +463,30 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"yearlyVolumeUsd\": 2000000\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"yearlyVolumeUsd\": 2000000\n}"
+            },
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}/corridors/{{quote_corridor_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}", "corridors", "{{quote_corridor_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "corridors",
+                "{{quote_corridor_id}}"
+              ]
             },
             "description": "Updates pricing inputs for a corridor already on the quote — the backend recomputes revenue/FX margin/margin fee/gross margin/take-rate and both approval checks (financial + network, see \"Add Corridor to Quote\") from the merged values. Can also include `pricingModel` (\"standard\"/\"tiered\") and `tiers` (see \"Add Tiered Corridor to Quote\") — switching to \"standard\" deletes the corridor's tier rows; omitting `tiers` while already tiered re-prices using whatever tiers are already saved (e.g. after changing yearlyVolumeUsd alone). `fundingCurrencyId` is deliberately not accepted here (Phase B decision) — a row's funding currency is fixed once it exists; sending it is silently ignored rather than erroring."
           }
@@ -308,8 +496,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -317,8 +511,15 @@
             },
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}/corridors/bulk-delete",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}", "corridors", "bulk-delete"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "corridors",
+                "bulk-delete"
+              ]
             },
             "description": "Soft-deletes every id in `corridorIds` that's currently active on this quote. Returns `{ deletedIds, notFoundIds }` — ids that belong to a different quote, don't exist, or are already deleted land in `notFoundIds` instead of failing the whole request (idempotent partial success, not an error)."
           },
@@ -342,11 +543,23 @@
           "name": "List Deleted Corridors",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}/corridors/deleted",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}", "corridors", "deleted"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "corridors",
+                "deleted"
+              ]
             },
             "description": "Lists this quote's currently soft-deleted corridors, with the same corridor/country/currency detail as \"Show Quote\" — the data source for a Restore picker UI."
           },
@@ -375,8 +588,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -384,8 +603,15 @@
             },
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}/corridors/bulk-restore",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}", "corridors", "bulk-restore"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "corridors",
+                "bulk-restore"
+              ]
             },
             "description": "Restores every id in `corridorIds` that's currently soft-deleted on this quote (its tiers come back exactly as they were). Returns `{ restoredIds, notFoundIds }` — ids that aren't currently deleted land in `notFoundIds`, not an error."
           },
@@ -409,11 +635,23 @@
           "name": "Remove Corridor from Quote",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}/corridors/{{quote_corridor_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}", "corridors", "{{quote_corridor_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "corridors",
+                "{{quote_corridor_id}}"
+              ]
             },
             "description": "Soft-deletes the corridor (sets `deleted_at`) rather than removing the row — it disappears from the quote and its totals but can be brought back with \"Bulk Restore Corridors\". Placed after the bulk requests in this collection so it runs against the corridor while it's still active."
           }
@@ -422,11 +660,22 @@
           "name": "Get Setup Fee",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}/setup-fee",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}", "setup-fee"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "setup-fee"
+              ]
             },
             "description": "Returns `{ setupFee: null }` until the tab has been saved once, otherwise `{ setupFee: {...} }` with every backend-computed value (finalCommitmentFee, year1CommittedRevenue, totalContractValue, needsApproval, approvalReasons) plus its milestones/principal-slots/block-fees/other-fees."
           }
@@ -436,8 +685,14 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -445,21 +700,93 @@
             },
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}/setup-fee",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}", "setup-fee"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "setup-fee"
+              ]
             },
             "description": "Creates or replaces the quote's whole Setup Fee tab in one call (only allowed while the quote is in 'draft' status). The backend validates cross-field consistency (custom payment milestones must sum to exactly 100%, principal-based MCF must have enough slots for the contract length, waived months capped at 6 — the old app's own UI never actually allowed past 6 despite its input saying 24) and computes finalCommitmentFee/year1CommittedRevenue/totalContractValue/needsApproval/approvalReasons itself — none of that is trusted from the request body. otherFees concept codes: reversal_request, proof_of_payment, emergency_funding, treasury_management, business_hub_platform, post_funding_penalty, corridor_no_usage, white_glove, stablecoin_prefunding, digital_asset_icp_setup, bulk_currency_conversion, currencies_for_treasury. For a custom payment schedule, add a paymentMilestones array; for a principal-based MCF, add mcfPrincipalSlots (2 slots for a 12-month contract, 3 for longer)."
+          }
+        },
+        {
+          "name": "Get P&L",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/pnl",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "pnl"
+              ]
+            },
+            "description": "Returns the quote's 3-year P&L projection, computed from saved (non-deleted, positive-volume) corridors and the saved Setup Fee — never unsaved preview edits. Response: { inputs: { year2GrowthPct, year3GrowthPct }, years: { year1, year2, year3 }, completeness: { corridorCount, hasSetupFee }, needsApproval, approvalReasons }. Growth defaults to 0/0 until PUT is called at least once; an explicitly saved 0% growth is never replaced with a guessed default."
+          }
+        },
+        {
+          "name": "Update P&L Growth Inputs",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"year2GrowthPct\": 10,\n  \"year3GrowthPct\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/pnl",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "pnl"
+              ]
+            },
+            "description": "Sets the two P&L growth inputs (Year2-over-1 %, Year3-over-2 %) — only allowed while the quote is in 'draft' status. Returns the same shape as GET, recomputed with the new inputs. Growth is bounded to [-100, 500]. Year 1 is never affected by growth; Year 2/3 corridor-derived figures compound from Year 1, while one-off Setup/Network fees apply to Year 1 only and MCF commitment-fee revenue for Year 2/3 comes from the real month-by-month MCF schedule, not a guess."
           }
         },
         {
           "name": "Delete Quote",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/quotes/{{quote_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["quotes", "{{quote_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}"
+              ]
             },
             "description": "Only allowed while the quote is still in 'draft' status."
           }
@@ -473,11 +800,21 @@
           "name": "Logout",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/auth/logout",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "logout"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
             },
             "description": "Revokes the current bearer token. Deliberately placed last in the collection — every other request needs the token, so logging out too early breaks everything after it. Run this manually whenever you're done, don't rely on \"Run collection\" order alone unless this folder truly runs last."
           },
