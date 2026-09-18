@@ -62,6 +62,39 @@ export function validatePnlGrowthField(value: number): string | null {
   return null
 }
 
+/**
+ * The old app's real per-cell approval thresholds, reverse-engineered from
+ * its live P&L table (`PLTab.tsx`) and `approval-guidelines-for-pl.ts`. Kept
+ * here as the single implementation — the old app hand-copied these same
+ * numbers (and their rounding rules) in three separate places, which is
+ * exactly the kind of drift this shared-math convention exists to prevent.
+ *
+ * `grossMarginPct` compares the fully raw ratio — the old app's real check
+ * never rounds it, even though it *displays* a rounded whole number, so a
+ * true 59.6% correctly fails even where the cell shows "60%". `marginPct`
+ * is the opposite: the old app rounds to 2 decimals before comparing.
+ */
+export function isGrossMarginBelowThreshold(
+  rawGrossMarginPct: number,
+  opportunityType: string | null
+): boolean {
+  const threshold = PNL_GROSS_MARGIN_THRESHOLD_BY_OPPORTUNITY[(opportunityType ?? '').trim().toLowerCase()]
+  return threshold !== undefined ? rawGrossMarginPct < threshold : rawGrossMarginPct < 0
+}
+
+export function isMarginPctBelowThreshold(marginPct: number, hasB2BCorridor: boolean): boolean {
+  const threshold = hasB2BCorridor ? PNL_MARGIN_PCT_THRESHOLD_B2B : PNL_MARGIN_PCT_THRESHOLD_NON_B2B
+  return round(marginPct, 2) < threshold
+}
+
+export function isFxMarginNegative(fxMargin: number): boolean {
+  return fxMargin < 0
+}
+
+export function isFxMarginPctNegative(fxMarginPct: number): boolean {
+  return fxMarginPct < 0
+}
+
 /** Only the fields computeQuotePnl needs from a saved corridor's already-computed pricing result. */
 export interface PnlPricedCorridor {
   yearlyVolumeUsd: number
@@ -142,7 +175,11 @@ function buildYear(
     takeRatePct: round(ratio(totalRevenue, principal), 2),
     marginPct: round(ratio(yearTotalMargin, principal), 2),
     fxMarginPct: round(ratio(fxMargin, principal), 2),
-    grossMarginPct: Math.round(ratio(yearTotalMargin, totalRevenue)),
+    // 2-decimal precision, matching marginPct/fxMarginPct — the old app's
+    // real GM% approval check compares the fully raw ratio, so rounding to
+    // a whole number here (as the UI displays it) would let a true 59.6%
+    // wrongly show "60%" and pass. Display-only rounding happens in PnlTab.
+    grossMarginPct: round(ratio(yearTotalMargin, totalRevenue), 2),
   }
 }
 

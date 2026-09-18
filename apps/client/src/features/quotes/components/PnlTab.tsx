@@ -1,6 +1,17 @@
 import { useMemo } from 'react'
 import type { QuotePnlResult, QuotePnlYear } from '@strike/shared'
-import { computeQuotePnl, validatePnlGrowthField } from '@strike/shared'
+import {
+  computeQuotePnl,
+  isFxMarginNegative,
+  isFxMarginPctNegative,
+  isGrossMarginBelowThreshold,
+  isMarginPctBelowThreshold,
+  PNL_GROSS_MARGIN_THRESHOLD_BY_OPPORTUNITY,
+  PNL_MARGIN_PCT_THRESHOLD_B2B,
+  PNL_MARGIN_PCT_THRESHOLD_NON_B2B,
+  validatePnlGrowthField,
+} from '@strike/shared'
+import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { getApiErrorMessage, getApiFieldErrors } from '@/lib/api-error'
 import { useQuote } from '../api/useQuotes'
@@ -14,11 +25,13 @@ export function PnlTab({
   tabKey,
   quoteId,
   contractLengthYears,
+  opportunityType,
   updatePnl,
 }: {
   tabKey: string
   quoteId: number | null
   contractLengthYears: number
+  opportunityType: string | null
   updatePnl: ReturnType<typeof useUpdateQuotePnl>
 }) {
   if (quoteId === null) {
@@ -38,6 +51,7 @@ export function PnlTab({
       tabKey={tabKey}
       quoteId={quoteId}
       contractLengthYears={contractLengthYears}
+      opportunityType={opportunityType}
       updatePnl={updatePnl}
     />
   )
@@ -47,11 +61,13 @@ function PnlTabContent({
   tabKey,
   quoteId,
   contractLengthYears,
+  opportunityType,
   updatePnl,
 }: {
   tabKey: string
   quoteId: number
   contractLengthYears: number
+  opportunityType: string | null
   updatePnl: ReturnType<typeof useUpdateQuotePnl>
 }) {
   const { data: pnl, isLoading } = useQuotePnl(quoteId)
@@ -110,6 +126,18 @@ function PnlTabContent({
     [quoteData]
   )
 
+  // Same membership rule as pricedCorridors above — a B2B corridor that's
+  // deleted or zero-volume shouldn't change which margin-% floor applies,
+  // matching D1/D2 exactly (the old app's real bug was checking B2B against
+  // a *different* corridor set than the one its live table actually used).
+  const hasB2BCorridor = useMemo(
+    () =>
+      (quoteData?.quote.corridors ?? []).some(
+        (c) => c.yearlyVolumeUsd > 0 && c.totalRevenue !== null && c.corridor?.transactionTypeCode === 'B2B'
+      ),
+    [quoteData]
+  )
+
   const setupFeeInputs = useMemo(() => {
     if (!setupFee) return null
     return {
@@ -155,6 +183,23 @@ function PnlTabContent({
 
   const isDirty = draft !== undefined
   const displayedYears = isDirty && preview ? preview : pnl.years
+
+  // Live, per-year threshold flags — recomputed on every keystroke from
+  // whatever's currently displayed (the unsaved preview, or the last-saved
+  // years), via the exact same shared functions the backend uses for its
+  // persisted approvalReasons, so the two can never disagree. Matches the
+  // old app's real live P&L table: FX Margin/FX Margin %/Margin %/Gross
+  // Margin % are each checked independently for Year 1, 2, and 3.
+  const yearFlags: Record<'year1' | 'year2' | 'year3', PnlYearFlags> = {
+    year1: computeYearFlags(displayedYears.year1, opportunityType, hasB2BCorridor),
+    year2: computeYearFlags(displayedYears.year2, opportunityType, hasB2BCorridor),
+    year3: computeYearFlags(displayedYears.year3, opportunityType, hasB2BCorridor),
+  }
+  const gmThreshold =
+    PNL_GROSS_MARGIN_THRESHOLD_BY_OPPORTUNITY[(opportunityType ?? '').trim().toLowerCase()]
+  const marginPctThreshold = hasB2BCorridor
+    ? PNL_MARGIN_PCT_THRESHOLD_B2B
+    : PNL_MARGIN_PCT_THRESHOLD_NON_B2B
 
   return (
     <div className="space-y-6">
@@ -215,7 +260,12 @@ function PnlTabContent({
           Always a 3-year forecast, regardless of contract length. Year 1 reflects saved corridor
           pricing and setup fee only; Year 2/3 apply the growth rates above.
         </p>
-        <PnlTable years={displayedYears} />
+        <PnlTable
+          years={displayedYears}
+          flags={yearFlags}
+          gmThreshold={gmThreshold}
+          marginPctThreshold={marginPctThreshold}
+        />
       </CollapsibleSection>
     </div>
   )
@@ -244,14 +294,83 @@ const PERCENT_ROWS: { key: keyof QuotePnlYear; label: string }[] = [
 const PLAIN_ROW_KEYS: (keyof QuotePnlYear)[] = ['transactions']
 
 function formatCell(key: keyof QuotePnlYear, value: number, isPercent: boolean): string {
+  // Gross Margin % is compared on its full 2-decimal precision (a true
+  // 59.6% must still fail even though it's shown as "60%") but always
+  // *displayed* as a whole number, matching the old app's real display.
+  if (key === 'grossMarginPct') return `${Math.round(value)}%`
   if (isPercent) return `${value}%`
   if (PLAIN_ROW_KEYS.includes(key)) return value.toLocaleString()
   return `$${value.toLocaleString()}`
 }
 
-function PnlTable({ years }: { years: QuotePnlResult }) {
+/** The four rows the old app's real live P&L table validates — everything else is a plain value. */
+export interface PnlYearFlags {
+  fxMarginNegative: boolean
+  fxMarginPctNegative: boolean
+  marginBelowThreshold: boolean
+  gmBelowThreshold: boolean
+}
+
+export function computeYearFlags(
+  year: QuotePnlYear,
+  opportunityType: string | null,
+  hasB2BCorridor: boolean
+): PnlYearFlags {
+  return {
+    fxMarginNegative: isFxMarginNegative(year.fxMargin),
+    fxMarginPctNegative: isFxMarginPctNegative(year.fxMarginPct),
+    marginBelowThreshold: isMarginPctBelowThreshold(year.marginPct, hasB2BCorridor),
+    gmBelowThreshold: isGrossMarginBelowThreshold(year.grossMarginPct, opportunityType),
+  }
+}
+
+/** Whether/how a validated row's cell for one year should be highlighted, and the caption to show. */
+function violationFor(
+  key: keyof QuotePnlYear,
+  flags: PnlYearFlags,
+  gmThreshold: number | undefined,
+  marginPctThreshold: number
+): { violated: boolean; passed: boolean; caption?: string } {
+  switch (key) {
+    case 'fxMargin':
+      return { violated: flags.fxMarginNegative, passed: false, caption: 'Negative FX Margin' }
+    case 'fxMarginPct':
+      return { violated: flags.fxMarginPctNegative, passed: false, caption: 'Negative FX Margin %' }
+    case 'marginPct':
+      return {
+        violated: flags.marginBelowThreshold,
+        passed: false,
+        caption: `Below ${marginPctThreshold.toFixed(2)}% minimum`,
+      }
+    case 'grossMarginPct':
+      // The only one of the four that also turns green on pass, matching
+      // the old app's real table exactly.
+      return {
+        violated: flags.gmBelowThreshold,
+        passed: !flags.gmBelowThreshold,
+        caption: gmThreshold !== undefined ? `Below ${gmThreshold}%` : 'Negative',
+      }
+    default:
+      return { violated: false, passed: false }
+  }
+}
+
+const VALIDATED_ROW_KEYS: (keyof QuotePnlYear)[] = ['fxMargin', 'fxMarginPct', 'marginPct', 'grossMarginPct']
+
+function PnlTable({
+  years,
+  flags,
+  gmThreshold,
+  marginPctThreshold,
+}: {
+  years: QuotePnlResult
+  flags: Record<'year1' | 'year2' | 'year3', PnlYearFlags>
+  gmThreshold: number | undefined
+  marginPctThreshold: number
+}) {
   const rows = [...CURRENCY_ROWS, ...PERCENT_ROWS]
   const isPercentRow = (key: keyof QuotePnlYear) => PERCENT_ROWS.some((r) => r.key === key)
+  const yearKeys = ['year1', 'year2', 'year3'] as const
 
   return (
     <div className="overflow-x-auto">
@@ -265,14 +384,43 @@ function PnlTable({ years }: { years: QuotePnlResult }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ key, label }) => (
-            <tr key={key} className="border-b last:border-0">
-              <td className="py-1.5 pr-3 font-medium">{label}</td>
-              <td className="py-1.5 pr-3">{formatCell(key, years.year1[key], isPercentRow(key))}</td>
-              <td className="py-1.5 pr-3">{formatCell(key, years.year2[key], isPercentRow(key))}</td>
-              <td className="py-1.5 pr-3">{formatCell(key, years.year3[key], isPercentRow(key))}</td>
-            </tr>
-          ))}
+          {rows.map(({ key, label }) => {
+            const isValidated = VALIDATED_ROW_KEYS.includes(key)
+            return (
+              <tr key={key} className="border-b last:border-0">
+                <td className="py-1.5 pr-3 font-medium">{label}</td>
+                {yearKeys.map((yearKey) => {
+                  const value = years[yearKey][key]
+                  if (!isValidated) {
+                    return (
+                      <td key={yearKey} className="py-1.5 pr-3">
+                        {formatCell(key, value, isPercentRow(key))}
+                      </td>
+                    )
+                  }
+                  const { violated, passed, caption } = violationFor(
+                    key,
+                    flags[yearKey],
+                    gmThreshold,
+                    marginPctThreshold
+                  )
+                  return (
+                    <td
+                      key={yearKey}
+                      className={cn(
+                        'py-1.5 pr-3',
+                        violated && 'bg-destructive/10 text-destructive',
+                        passed && 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
+                      )}
+                    >
+                      {formatCell(key, value, isPercentRow(key))}
+                      {violated && caption && <div className="text-[10px] font-normal">{caption}</div>}
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>

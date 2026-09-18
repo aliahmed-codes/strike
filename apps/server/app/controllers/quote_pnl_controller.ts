@@ -92,9 +92,7 @@ async function buildPnlResponse(quote: Quote) {
   const approvalReasons = computePnlApprovalReasons({
     opportunityType: quote.opportunityType,
     hasB2BCorridor: hasB2BCorridor(quote),
-    year1GrossMarginPct: years.year1.grossMarginPct,
-    year1MarginPct: years.year1.marginPct,
-    year1FxMargin: years.year1.fxMargin,
+    years,
   })
 
   return {

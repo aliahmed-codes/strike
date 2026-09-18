@@ -168,6 +168,7 @@ export function QuoteEditorPage() {
             tabKey={tabKey}
             quoteId={tab.quoteId}
             contractLengthYears={contractLengthYears}
+            opportunityType={opportunityType}
             updatePnl={updatePnl}
           />
         </TabsContent>

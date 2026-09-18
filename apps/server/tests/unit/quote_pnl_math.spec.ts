@@ -4,6 +4,8 @@ import {
   computePnlApprovalReasons,
   type PnlPricedCorridor,
   type PnlSetupFeeInputs,
+  type QuotePnlResult,
+  type QuotePnlYear,
 } from '#services/quote_pnl_service'
 
 function corridor(overrides: Partial<PnlPricedCorridor> = {}): PnlPricedCorridor {
@@ -179,37 +181,74 @@ test.group('computeQuotePnl', () => {
   })
 })
 
+/** A clearly-passing year by default — tests override only the field(s) under test. */
+function pnlYear(overrides: Partial<QuotePnlYear> = {}): QuotePnlYear {
+  return {
+    principal: 1_000_000,
+    transactions: 10_000,
+    atvUsd: 100,
+    feeRevenue: 100_000,
+    fxMargin: 100,
+    oneOffFee: 0,
+    commitmentFeeRevenue: 0,
+    totalRevenue: 100_000,
+    marginFee: 90_000,
+    totalMargin: 90_000,
+    takeRatePct: 10,
+    marginPct: 90,
+    fxMarginPct: 0.01,
+    grossMarginPct: 90,
+    ...overrides,
+  }
+}
+
+function pnlYears(overrides: {
+  year1?: Partial<QuotePnlYear>
+  year2?: Partial<QuotePnlYear>
+  year3?: Partial<QuotePnlYear>
+}): QuotePnlResult {
+  return {
+    year1: pnlYear(overrides.year1),
+    year2: pnlYear(overrides.year2),
+    year3: pnlYear(overrides.year3),
+  }
+}
+
 test.group('computePnlApprovalReasons', () => {
   test('flags a New Partner quote below the 60% GM threshold', ({ assert }) => {
     const reasons = computePnlApprovalReasons({
       opportunityType: 'New partner',
       hasB2BCorridor: false,
-      year1GrossMarginPct: 50,
-      year1MarginPct: 1,
-      year1FxMargin: 100,
+      years: pnlYears({ year1: { grossMarginPct: 50 } }),
     })
 
-    assert.isTrue(reasons.some((r) => r.includes('60%')))
+    assert.isTrue(reasons.some((r) => r.includes('Year 1') && r.includes('60%')))
   })
 
   test('does not flag GM for an unlisted opportunity type unless it is negative', ({ assert }) => {
     const clean = computePnlApprovalReasons({
       opportunityType: 'Renewal',
       hasB2BCorridor: false,
-      year1GrossMarginPct: 10,
-      year1MarginPct: 1,
-      year1FxMargin: 100,
+      years: pnlYears({ year1: { grossMarginPct: 10 } }),
     })
     assert.isEmpty(clean)
 
     const negative = computePnlApprovalReasons({
       opportunityType: 'Renewal',
       hasB2BCorridor: false,
-      year1GrossMarginPct: -5,
-      year1MarginPct: 1,
-      year1FxMargin: 100,
+      years: pnlYears({ year1: { grossMarginPct: -5 } }),
     })
     assert.isTrue(negative.some((r) => r.includes('negative')))
+  })
+
+  test('a raw 59.6% gross margin still fails even though it displays as 60%', ({ assert }) => {
+    const reasons = computePnlApprovalReasons({
+      opportunityType: 'New partner',
+      hasB2BCorridor: false,
+      years: pnlYears({ year1: { grossMarginPct: 59.6 } }),
+    })
+
+    assert.isTrue(reasons.some((r) => r.includes('60%')))
   })
 
   test('uses the B2B margin-percent threshold only when a B2B corridor is present', ({
@@ -218,31 +257,37 @@ test.group('computePnlApprovalReasons', () => {
     const nonB2B = computePnlApprovalReasons({
       opportunityType: null,
       hasB2BCorridor: false,
-      year1GrossMarginPct: 90,
-      year1MarginPct: 0.3,
-      year1FxMargin: 100,
+      years: pnlYears({ year1: { marginPct: 0.3 } }),
     })
     assert.isTrue(nonB2B.some((r) => r.includes('0.4%')))
 
     const b2b = computePnlApprovalReasons({
       opportunityType: null,
       hasB2BCorridor: true,
-      year1GrossMarginPct: 90,
-      year1MarginPct: 0.3,
-      year1FxMargin: 100,
+      years: pnlYears({ year1: { marginPct: 0.3 } }),
     })
     assert.isEmpty(b2b)
   })
 
-  test('flags a negative Year 1 FX margin', ({ assert }) => {
+  test('flags a negative Year 1 FX margin and FX margin %', ({ assert }) => {
     const reasons = computePnlApprovalReasons({
       opportunityType: null,
       hasB2BCorridor: false,
-      year1GrossMarginPct: 90,
-      year1MarginPct: 1,
-      year1FxMargin: -1,
+      years: pnlYears({ year1: { fxMargin: -1, fxMarginPct: -0.1 } }),
     })
 
     assert.isTrue(reasons.some((r) => r.includes('FX margin is negative')))
+    assert.isTrue(reasons.some((r) => r.includes('FX margin % is negative')))
+  })
+
+  test('flags a Year 2-only violation without falsely flagging Year 1 or 3', ({ assert }) => {
+    const reasons = computePnlApprovalReasons({
+      opportunityType: 'New partner',
+      hasB2BCorridor: false,
+      years: pnlYears({ year2: { grossMarginPct: 40 } }),
+    })
+
+    assert.lengthOf(reasons, 1)
+    assert.isTrue(reasons[0].includes('Year 2'))
   })
 })
