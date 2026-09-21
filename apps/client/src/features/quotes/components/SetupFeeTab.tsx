@@ -12,7 +12,14 @@ import type {
   SetupFeeFields,
 } from '@strike/shared'
 import {
+  FEE_TYPE_OPTIONS,
+  JOINING_FEE_BILLING_TYPE_OPTIONS,
   MAX_WAIVED_MONTHS,
+  MCF_BILLING_START_OPTIONS,
+  MCF_TYPE_OPTIONS,
+  OTHER_FEE_META,
+  PAYMENT_SCHEDULE_OPTIONS,
+  REBATE_TYPE_OPTIONS,
   OTHER_FEE_CONCEPTS,
   TOTAL_CONTRACT_VALUE_APPROVAL_THRESHOLD_USD,
   YEAR1_REVENUE_APPROVAL_THRESHOLD_USD,
@@ -34,55 +41,6 @@ import { useQuoteWorkspaceStore } from '../store/useQuoteWorkspaceStore'
 import { CollapsibleSection } from './CollapsibleSection'
 import { FormField } from './FormField'
 import { SimpleSelect } from './SimpleSelect'
-
-const FEE_TYPES: { value: FeeType; label: string }[] = [
-  { value: 'setup', label: 'Set Up Fee' },
-  { value: 'network', label: 'Network Joining Fee' },
-]
-const PAYMENT_SCHEDULES: { value: PaymentSchedule; label: string }[] = [
-  { value: 'full', label: 'On Contract Signature - 100%' },
-  { value: 'custom', label: 'Custom' },
-]
-const JOINING_FEE_BILLING_TYPES: { value: JoiningFeeBillingType; label: string }[] = [
-  { value: 'at_signing', label: 'At Contract Signing' },
-  { value: 'non_standard', label: 'Non-Standard Terms' },
-]
-const MCF_TYPES: { value: McfType; label: string }[] = [
-  { value: 'standard', label: 'Fee Revenue Based (Standard)' },
-  { value: 'principal', label: 'Volume / Principal Based' },
-]
-const MCF_BILLING_STARTS: { value: McfBillingStart; label: string }[] = [
-  { value: 'at_signing', label: 'At Contract Signing' },
-  { value: 'at_go_live', label: 'At Go-Live' },
-  { value: 'non_standard', label: 'Other / Non-Standard' },
-]
-const REBATE_TYPES: { value: RebateType; label: string }[] = [
-  { value: 'volume', label: 'Volume Amount Based' },
-  { value: 'revenue', label: 'Revenue Amount Based' },
-  { value: 'transaction_count', label: 'Transaction Count Based' },
-  { value: 'other', label: 'Other' },
-]
-
-// Concept label + whether it's a percentage — fixed per concept, matching the
-// old app's real fields (see FEATURES.md Phase 2 investigation notes).
-// Whether a concept needs a currency selected comes from
-// @strike/shared's otherFeeRequiresCurrency, not a field here, so the
-// frontend's required-field indicator can never disagree with the backend's
-// save-time check about which concept(s) it applies to.
-const OTHER_FEE_META: Record<OtherFeeConcept, { label: string; isPercentage: boolean }> = {
-  reversal_request: { label: 'Service Request Fee (Reversal Request)', isPercentage: false },
-  proof_of_payment: { label: 'Service Request Fee (Proof of Payment)', isPercentage: false },
-  emergency_funding: { label: 'Emergency Funding Fee', isPercentage: true },
-  treasury_management: { label: 'Treasury Management Fee', isPercentage: true },
-  business_hub_platform: { label: 'Business Hub Platform Fee', isPercentage: false },
-  post_funding_penalty: { label: 'Post-Funding Line Penalty Fee', isPercentage: true },
-  corridor_no_usage: { label: 'Corridor No-Usage Fee', isPercentage: false },
-  white_glove: { label: 'White-Glove Service', isPercentage: false },
-  stablecoin_prefunding: { label: 'Stablecoin Pre-funding Set-up Fee', isPercentage: false },
-  digital_asset_icp_setup: { label: 'Digital Asset ICP Setup Fee', isPercentage: false },
-  bulk_currency_conversion: { label: 'Bulk Currency Conversion', isPercentage: false },
-  currencies_for_treasury: { label: 'Currencies For Treasury Management Fee', isPercentage: false },
-}
 
 // Errors on these fields get attached directly under their own input.
 // Everything else (nested milestone/slot/other-fee rows, and business-rule
@@ -451,7 +409,7 @@ function SetupFeeTabContent({
             <SimpleSelect
               value={form.feeType}
               onValueChange={(v) => setForm((f) => ({ ...f, feeType: v as FeeType }))}
-              options={FEE_TYPES}
+              options={FEE_TYPE_OPTIONS}
             />
           </FormField>
           <FormField label="Quoting Price">
@@ -488,7 +446,7 @@ function SetupFeeTabContent({
                       : f.paymentMilestones,
                 }))
               }
-              options={PAYMENT_SCHEDULES.map((option) =>
+              options={PAYMENT_SCHEDULE_OPTIONS.map((option) =>
                 option.value === 'custom' ? { ...option, disabled: !canUseCustomSchedule } : option
               )}
             />
@@ -497,7 +455,7 @@ function SetupFeeTabContent({
             <SimpleSelect
               value={form.joiningFeeBillingType}
               onValueChange={(v) => setForm((f) => ({ ...f, joiningFeeBillingType: v as JoiningFeeBillingType }))}
-              options={JOINING_FEE_BILLING_TYPES}
+              options={JOINING_FEE_BILLING_TYPE_OPTIONS}
             />
           </FormField>
         </div>
@@ -567,14 +525,14 @@ function SetupFeeTabContent({
             <SimpleSelect
               value={form.mcfType}
               onValueChange={(v) => switchMcfType(v as McfType)}
-              options={MCF_TYPES}
+              options={MCF_TYPE_OPTIONS}
             />
           </FormField>
           <FormField label="MCF Billing Start">
             <SimpleSelect
               value={form.mcfBillingStart}
               onValueChange={(v) => setForm((f) => ({ ...f, mcfBillingStart: v as McfBillingStart }))}
-              options={MCF_BILLING_STARTS}
+              options={MCF_BILLING_START_OPTIONS}
             />
           </FormField>
           <FormField
@@ -769,7 +727,7 @@ function SetupFeeTabContent({
               <SimpleSelect
                 value={form.rebateType ?? ''}
                 onValueChange={(v) => setForm((f) => ({ ...f, rebateType: v as RebateType }))}
-                options={REBATE_TYPES}
+                options={REBATE_TYPE_OPTIONS}
                 ariaInvalid={form.rebateType === null}
               />
               {form.rebateType === null && (

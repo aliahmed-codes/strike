@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { FxModel, FxPricingOption, PricingStrategy, Quote, QuoteTotals } from '@strike/shared'
+import { FX_MODEL_LABELS, PRICING_STRATEGY_LABELS } from '@strike/shared'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -20,11 +21,10 @@ import { CorridorsToOfferSection, useCorridorFilterFields } from './CorridorsToO
 
 const OPPORTUNITY_TYPES = ['New partner', 'Pricing Change', 'Upsell']
 
-const FX_MODELS = [
-  { value: 'traditional_fx', label: 'Traditional FX' },
-  { value: 'trading_desk', label: 'Trading Desk' },
-  { value: 'both_models', label: 'Both Models' },
-]
+const FX_MODELS = (Object.keys(FX_MODEL_LABELS) as FxModel[]).map((value) => ({
+  value,
+  label: FX_MODEL_LABELS[value],
+}))
 const FX_MODEL_CAPTIONS: Record<string, string> = {
   traditional_fx: 'The partner uses FX rates provided by the platform, with a built-in spread',
   trading_desk: 'The partner provides their own FX rate via a treasury function',
@@ -34,10 +34,10 @@ const FX_MODEL_CAPTIONS: Record<string, string> = {
 // Only "Corridor Pricing" has real pricing rules implemented today — the rest
 // are shown (matching the old app's dropdown) but disabled until built.
 const PRICING_STRATEGIES = [
-  { value: 'corridor_pricing', label: 'Corridor Pricing' },
-  { value: 'flat_fee', label: 'Flat Fee', disabled: true },
-  { value: 'volume_based', label: 'Volume-Based', disabled: true },
-  { value: 'tiered_pricing', label: 'Tiered Pricing', disabled: true },
+  { value: 'corridor_pricing', label: PRICING_STRATEGY_LABELS.corridor_pricing },
+  { value: 'flat_fee', label: PRICING_STRATEGY_LABELS.flat_fee, disabled: true },
+  { value: 'volume_based', label: PRICING_STRATEGY_LABELS.volume_based, disabled: true },
+  { value: 'tiered_pricing', label: PRICING_STRATEGY_LABELS.tiered_pricing, disabled: true },
 ]
 
 const FX_PRICING_OPTIONS = [

@@ -35,9 +35,7 @@ export type { PnlPricedCorridor, PnlSetupFeeInputs, QuotePnlResult, QuotePnlYear
  */
 export async function loadPricedCorridors(quote: Quote): Promise<PnlPricedCorridor[]> {
   await quote.load('corridors', (q) => {
-    q.withScopes((s) => s.active())
-    q.where('yearlyVolumeUsd', '>', 0)
-    q.whereNotNull('totalRevenue')
+    q.withScopes((s) => s.priced())
     q.preload('corridor')
   })
 

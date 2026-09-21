@@ -793,6 +793,74 @@
           }
         },
         {
+          "name": "Get Legal Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/legal",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "legal"
+              ]
+            },
+            "description": "Read-only Final Quotation for the Legal tab, built from saved data only: one-off fee, fee/funding/source currencies, other pricing line items (zero items dropped), corridor rows (saved, non-deleted, volume > 0, sorted by country; fixed fee converted into the fee currency; FX spread/source only when the quote's show-in-contract flags are on; one row per tier for tiered corridors), commitment terms and payment terms. blockers lists everything the contract cannot invent (contract length, fee/funding/source currency, FX model, pricing strategy, Setup Fee, priced corridors, missing USD->fee-currency rate) — a missing rate is never treated as 1:1."
+          }
+        },
+        {
+          "name": "Download Legal Contract",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns an xlsx attachment, or 422 with blockers while the quote is incomplete', function () {",
+                  "  if (pm.response.code === 422) {",
+                  "    pm.expect(pm.response.json().blockers).to.be.an('array').that.is.not.empty;",
+                  "    return;",
+                  "  }",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('spreadsheetml.sheet');",
+                  "  pm.expect(pm.response.headers.get('Content-Disposition')).to.include('Legal Contract');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/documents/legal-contract",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "documents",
+                "legal-contract"
+              ]
+            },
+            "description": "Downloads the Legal Contract workbook (sheet 'Quotation', title 'Legal Summary') generated on the server from the same data as Get Legal Data. Use Send and Download in Postman to save the file. Any quote status is allowed; until the quote is approved the sheet carries a 'DRAFT — this quote has not been approved' row. Returns 422 with { message, blockers } while Get Legal Data still lists blockers. Filename: 'Legal Contract - <PR code> - <quote name>.xlsx'."
+          }
+        },
+        {
           "name": "Delete Quote",
           "request": {
             "method": "DELETE",

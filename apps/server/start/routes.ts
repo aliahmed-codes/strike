@@ -16,6 +16,7 @@ const QuoteCorridorsController = () => import('#controllers/quote_corridors_cont
 const SetupFeeController = () => import('#controllers/setup_fee_controller')
 const QuotePnlController = () => import('#controllers/quote_pnl_controller')
 const QuoteSummaryController = () => import('#controllers/quote_summary_controller')
+const QuoteLegalController = () => import('#controllers/quote_legal_controller')
 
 router.get('/', async () => {
   return {
@@ -68,6 +69,9 @@ router
     router.put('/:quoteId/pnl', [QuotePnlController, 'update'])
 
     router.get('/:quoteId/summary', [QuoteSummaryController, 'show'])
+
+    router.get('/:quoteId/legal', [QuoteLegalController, 'show'])
+    router.get('/:quoteId/documents/legal-contract', [QuoteLegalController, 'downloadContract'])
   })
   .prefix('/quotes')
   .use(middleware.auth())

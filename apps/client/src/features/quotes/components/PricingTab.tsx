@@ -19,7 +19,9 @@ import {
   computeQuoteTotals,
   computeTieredCorridorPricing,
   computeTreasuryFxCostPct,
+  feeCurrencyToUsd,
   seedQuoteCorridorFromCatalog,
+  usdToFeeCurrencyAmount,
   validateCorridorField,
   validateTierAllocation,
   type Corridor,
@@ -357,34 +359,6 @@ function feeInFundingCurrency(
   if (currency.feeConversionRateToUsd === null) return 'No rate available'
   const converted = amountUsd * currency.feeConversionRateToUsd
   return `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency.isoCode3}`
-}
-
-/**
- * The reverse of `feeInFundingCurrency` — converts an amount typed in a
- * given currency back to USD, for a "Fee (Selected Currency)" input to
- * stage. Returns null (rather than a fabricated 1:1 rate) when the
- * currency has no real conversion rate, matching this app's existing
- * convention for every other currency-conversion display.
- */
-function feeCurrencyToUsd(
-  amountInCurrency: number,
-  currency: { isoCode3: string; feeConversionRateToUsd: number | null } | undefined
-): number | null {
-  if (!currency) return null
-  if (currency.isoCode3 === 'USD') return amountInCurrency
-  if (!currency.feeConversionRateToUsd) return null
-  return amountInCurrency / currency.feeConversionRateToUsd
-}
-
-/** The forward direction of `feeCurrencyToUsd` — same null-when-uncovered rule. */
-function usdToFeeCurrencyAmount(
-  amountUsd: number,
-  currency: { isoCode3: string; feeConversionRateToUsd: number | null } | undefined
-): number | null {
-  if (!currency) return null
-  if (currency.isoCode3 === 'USD') return amountUsd
-  if (!currency.feeConversionRateToUsd) return null
-  return amountUsd * currency.feeConversionRateToUsd
 }
 
 /** Live-preview math — the exact same function the backend uses to compute and validate on save, so this can never drift from what actually gets persisted. */

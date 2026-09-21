@@ -311,6 +311,20 @@ Term-sheet renderer (`termsheet_service.ts:66-219`):
 - PDF executes `soffice --headless --convert-to pdf` on a temporary DOCX. Production needs LibreOffice available, conversion limits, safe temporary-file lifecycle, and concurrency handling.
 - Fee Annex PDF instead launches Puppeteer with sandbox-disabling flags and uses stored HTML. Do not adopt those deployment/security flags automatically. Approved templates, safe resource loading, renderer isolation, and timeouts must be designed for NEW.
 
+### 5.5a Verified corrections and screen-level facts (2026-09-21)
+
+A second, code-level pass over `OLD/client/src/features/quotes/components/Legal.tsx`, `QuotingSummary.tsx` (`exportLegalContractExcel`, 2912-3520) and the old server legal/term-sheet/fee-annex code corrected the notes above:
+
+- **Comments UI is dead.** The whole comments JSX is commented out (`Legal.tsx:2209-2261`); `handleAddComment`/`handleDeleteComment` are unreachable, so "Comment added and legal team notified!" can never show. The `6000` commitment default is dead code too (`legalData.commitmentFees` is never rendered).
+- **A server-side Legal XLSX exists** (`server/.../legal_contract_excel_service.ts`, ExcelJS, mirrors the browser export). It has no download route; it is uploaded to Salesforce automatically on final approval, with errors only logged.
+- **The old term sheet is mostly blank.** Its template has 40 unique tags; only about 8 have any data source. The other ~32 read snapshot keys (company legal name, address, licences, sponsor bank, settlement, Schedule 1 dates, ...) that nothing in the old app ever writes, and "Central Bank Approval"/"Requires middleware" always print "No". The new app has none of those fields either, so a term sheet needs new legal-data inputs first (D11).
+- **The finalization gate can be passed without a saved annex** (the check reads a local store entry that is written before the network save and never rolled back).
+- **Legal tab on-screen table vs file:** the screen always shows FX Spread/FX Source and is unsorted; the XLSX honors the show-in-contract flags and sorts by country. The annex table is a third rendering (no Payer column, prints Volumes).
+- **Legal XLSX defects:** the "Year 4 and 5" column only holds Year 4; the month table ignores principal MCF; `||` chains turn a real 0 into the next value while other cells use `??`; `Pricing Model`/`FX Model` are hard-coded ("Corridor Pricing"/"Traditional FX"); contract length defaults to 2; missing currency rates convert at 1; header typo "Commisssion".
+- **Deployment:** LibreOffice (term-sheet PDF) and Chromium (annex PDF) are documented nowhere in the old deployment docs; the new server image has neither. The annex PDF interpolates the unsanitized annex name into `<title>` and lets `http(s)` images through the sanitizer.
+
+**Rebuild status:** the Legal pricing form (Final Quotation view + server-generated Legal Contract workbook, any status with a DRAFT marker) is built first. Fee Annex, Term Sheet, PDFs, Drive sync, comments, Salesforce upload, revenue-share columns and approved-only enforcement are deferred to their own plans (Step 9 backlog).
+
 ### 5.6 What remains for NEW
 
 At minimum: a verified legal data contract, required-field checks, approved templates, backend generation/download, disclosure rules, and a read-only Legal UI. Missing company/legal data is a prerequisite decision. A customer-facing “legal contract” must not silently substitute demo company details or treat a generated document as executed/signed. Browser editing, comment/version collaboration, Drive, Salesforce, and e-signatures are separate scope items.

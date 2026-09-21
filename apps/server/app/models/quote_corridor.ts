@@ -126,4 +126,9 @@ export default class QuoteCorridor extends BaseModel {
   static active = scope((query) => {
     query.whereNull('deleted_at')
   })
+
+  /** The one membership rule official P&L, Summary and Legal share: saved, not deleted, positive volume, priced. */
+  static priced = scope((query) => {
+    query.whereNull('deleted_at').where('yearly_volume_usd', '>', 0).whereNotNull('total_revenue')
+  })
 }

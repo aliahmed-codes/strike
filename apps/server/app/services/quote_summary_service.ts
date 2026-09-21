@@ -16,9 +16,7 @@ import { buildPnlResponse, loadSetupFeeInputs } from '#services/quote_pnl_servic
  */
 async function loadSummaryCorridors(quote: Quote): Promise<QuoteSummaryCorridor[]> {
   await quote.load('corridors', (q) => {
-    q.withScopes((s) => s.active())
-    q.where('yearlyVolumeUsd', '>', 0)
-    q.whereNotNull('totalRevenue')
+    q.withScopes((s) => s.priced())
     q.preload('corridor', (cq) => cq.preload('country', (ctq) => ctq.preload('region')))
   })
 

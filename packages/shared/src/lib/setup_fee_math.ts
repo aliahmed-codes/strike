@@ -127,7 +127,7 @@ export function principalFeeForMonth(slots: McfPrincipalSlotMathInput[], month: 
 }
 
 /** Month-by-month commitment fee (after waived-months zeroing), for months 1..contractLengthYears*12. Shared by computeSetupFeeTotals and commitmentFeesForYearRange so the two can never disagree on what a given month's fee is. */
-function monthlyCommitmentFeeSchedule(inputs: SetupFeeMathInputs): {
+export function monthlyCommitmentFeeSchedule(inputs: SetupFeeMathInputs): {
   fees: number[]
   finalCommitmentFee: number
 } {
