@@ -1,11 +1,18 @@
 import { isAxiosError } from 'axios'
 import { AlertTriangle } from 'lucide-react'
+import { useState } from 'react'
 import type { LegalOtherLineItem, QuoteLegalData } from '@strike/shared'
 import { Button } from '@/components/ui/button'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { saveBlob } from '@/lib/download-blob'
+import {
+  useDownloadFeeAnnexDocx,
+  useDownloadFeeAnnexPdf,
+  useFeeAnnex,
+} from '../api/useQuoteFeeAnnex'
 import { useDownloadLegalContract, useQuoteLegal } from '../api/useQuoteLegal'
 import { CollapsibleSection } from './CollapsibleSection'
+import { FeeAnnexEditorDialog } from './FeeAnnexEditorDialog'
 
 const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
@@ -104,8 +111,85 @@ function LegalTabContent({ quoteId }: { quoteId: number }) {
             </div>
           )}
         </div>
+
+        <div className="mt-6 space-y-3 border-t pt-6">
+          <FeeAnnexSection quoteId={quoteId} isApproved={legal.isApproved} />
+        </div>
       </CollapsibleSection>
     </div>
+  )
+}
+
+function FeeAnnexSection({ quoteId, isApproved }: { quoteId: number; isApproved: boolean }) {
+  const { data: annexData, isLoading } = useFeeAnnex(quoteId)
+  const downloadPdf = useDownloadFeeAnnexPdf(quoteId)
+  const downloadDocx = useDownloadFeeAnnexDocx(quoteId)
+  const [editorOpen, setEditorOpen] = useState(false)
+
+  const annex = annexData?.annex ?? null
+  const downloadDisabledReason = !isApproved
+    ? 'Available once the quote is approved'
+    : !annex
+      ? 'Save a Fee Annex first'
+      : undefined
+
+  return (
+    <>
+      <h3 className="font-medium">Fee Annex</h3>
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : annex ? (
+        <p className="text-sm text-muted-foreground">
+          Version {annex.version}
+          {annex.modifiedByName ? ` · saved by ${annex.modifiedByName}` : ''} ·{' '}
+          {new Date(annex.createdAt).toLocaleString()}
+          {annex.isStale && (
+            <span className="ml-2 text-amber-600 dark:text-amber-400">
+              (out of date with the quote's current data)
+            </span>
+          )}
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">No Fee Annex saved yet.</p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={() => setEditorOpen(true)}>
+          {annex ? 'Edit / Preview' : 'Create Fee Annex'}
+        </Button>
+        <Button
+          variant="outline"
+          disabled={Boolean(downloadDisabledReason) || downloadPdf.isPending}
+          title={downloadDisabledReason}
+          onClick={() =>
+            downloadPdf.mutate(undefined, {
+              onSuccess: ({ blob, fileName }) => saveBlob(blob, fileName),
+            })
+          }
+        >
+          {downloadPdf.isPending ? 'Generating…' : 'Download PDF'}
+        </Button>
+        <Button
+          variant="outline"
+          disabled={Boolean(downloadDisabledReason) || downloadDocx.isPending}
+          title={downloadDisabledReason}
+          onClick={() =>
+            downloadDocx.mutate(undefined, {
+              onSuccess: ({ blob, fileName }) => saveBlob(blob, fileName),
+            })
+          }
+        >
+          {downloadDocx.isPending ? 'Generating…' : 'Download DOCX'}
+        </Button>
+      </div>
+      {(downloadPdf.isError || downloadDocx.isError) && (
+        <p className="text-sm text-destructive">
+          {getApiErrorMessage(downloadPdf.error ?? downloadDocx.error)}
+        </p>
+      )}
+
+      <FeeAnnexEditorDialog quoteId={quoteId} open={editorOpen} onOpenChange={setEditorOpen} />
+    </>
   )
 }
 
