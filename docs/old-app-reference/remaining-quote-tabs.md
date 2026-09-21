@@ -325,6 +325,16 @@ A second, code-level pass over `OLD/client/src/features/quotes/components/Legal.
 
 **Rebuild status:** the Legal pricing form (Final Quotation view + server-generated Legal Contract workbook, any status with a DRAFT marker) is built first. Fee Annex, Term Sheet, PDFs, Drive sync, comments, Salesforce upload, revenue-share columns and approved-only enforcement are deferred to their own plans (Step 9 backlog).
 
+### 5.5b Fee Annex: verified facts and rebuild decisions (2026-09-22)
+
+A third code-level pass over the old annex code corrected §5.3:
+
+- **No annex template exists in either repo.** The annex is an uploaded Word document (converted to HTML by mammoth in the browser), an uploaded `.html`, or a Google Drive sync. The old `modules/quotation/legal` folder is 0-byte stubs.
+- **Populate is browser-only label matching.** Rows are found by label substring and values are written into the DOM; on first save the placeholders are consumed and hidden rows are deleted, so reopening never fully refreshes and a fee-type or MCF-model switch cannot be undone. The paragraph and table paths use conflicting defaults (Reversal/Proof `10`, Emergency `0.3`, contract `2` years, FX source `'Reuters Bid'`, rate `1`), `$` is hard-coded, and the corridor block sits in an empty `catch`.
+- **Finalization can be passed without an annex** (Clear + Save, or a local store entry); the edit permission flag is a cosmetic email allow-list.
+- **PDF/DOCX defects:** unsanitized annex name in `<title>`, remote images and `url()` allowed, root `--no-sandbox` without controls; DOCX export flattens `<br>`, nested divs and images, mis-sizes tables, and uses an unscoped, unsanitized `/quotes/html-to-docx` route. Versions race (no lock). The comments UI is dead.
+- **Rebuild:** server-side idempotent fill with field markers (`annex_fill_service.ts`), allow-list sanitizer, versions table, server PDF (Chromium via `CHROME_PATH`) and server DOCX (`docx`), all driven by the canonical `QuoteLegalData`. Deferred: Drive sync, comments, Salesforce upload, approved-only enforcement and the finalization gate (Approvals).
+
 ### 5.6 What remains for NEW
 
 At minimum: a verified legal data contract, required-field checks, approved templates, backend generation/download, disclosure rules, and a read-only Legal UI. Missing company/legal data is a prerequisite decision. A customer-facing “legal contract” must not silently substitute demo company details or treat a generated document as executed/signed. Browser editing, comment/version collaboration, Drive, Salesforce, and e-signatures are separate scope items.

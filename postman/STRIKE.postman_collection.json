@@ -861,6 +861,255 @@
           }
         },
         {
+          "name": "Get Fee Annex",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/fee-annex",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "fee-annex"
+              ]
+            },
+            "description": "The latest saved Fee Annex for the quote: { annex: { version, name, content, modifiedByName, createdAt, isStale } | null, suggestedName, hasSetupFee }. suggestedName is <Partner>_<PR>_<YYYYMMDD>_Fee_Annex (the old app's default). isStale is true when filling the saved document from the quote's current data would change it (a price, fee type, commitment or contract length changed since it was saved) — use Fill Fee Annex to refresh. Available at any quote status to the owner or an admin."
+          }
+        },
+        {
+          "name": "List Fee Annex Versions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/fee-annex/versions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "fee-annex",
+                "versions"
+              ]
+            },
+            "description": "Metadata for every saved version, newest first (no content, and the editor's name rather than their email)."
+          }
+        },
+        {
+          "name": "Save Fee Annex",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Saved (200) or rejected with a field error (422)', function () {",
+                  "  pm.expect([200, 422]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme_PR-100_20260922_Fee_Annex\",\n  \"content\": \"<h1>Fee Annex</h1><p>SET-UP FEE: [to be included by pricing]</p>\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/fee-annex",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "fee-annex"
+              ]
+            },
+            "description": "Saves the document as the next numbered version. Content is sanitized (script, event handlers, remote images and unsafe styles are removed) and the name is stored as plain text. Saving identical content and name is not a new version (changed: false). Allowed at any quote status, unlike other quote edits, so an approved quote's annex can still be corrected. Returns 422 { errors: [{ field, message }] } for an empty name or an annex with no content. Save Fee Annex does not fill values in — call Fill Fee Annex or Import Fee Annex first."
+          }
+        },
+        {
+          "name": "Fill Fee Annex",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"<h1>Fee Annex</h1><p>SET-UP FEE: [to be included by pricing]</p>\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/fee-annex/fill",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "fee-annex",
+                "fill"
+              ]
+            },
+            "description": "Returns the document filled from the quote's saved data without saving it: { content, warnings }. Fees, waiver, commitment periods, the selected one-off fee, the corridor table (only saved, non-deleted, volume > 0 corridors; FX columns follow the quote's show-in-contract flags) and the locked sections. Values sit in field markers and hidden rows are kept (display:none), so filling again after any change refreshes everything and can bring hidden rows back. A missing Setup Fee or contract length leaves the template text alone and adds a warning."
+          }
+        },
+        {
+          "name": "Import Fee Annex Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "A .docx or .html annex template (up to 15 MB). PDFs are refused."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/fee-annex/import",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "fee-annex",
+                "import"
+              ]
+            },
+            "description": "Converts an uploaded .docx (mammoth) or .html template, sanitizes it and fills it from the quote data. Returns { content, warnings, fileName } and saves nothing — review it, then Save Fee Annex. 422 { errors: [{ field: 'file', message }] } for a missing/unsupported/unreadable/empty file. Choose a file in the Body tab before sending."
+          }
+        },
+        {
+          "name": "Download Fee Annex PDF",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('PDF attachment, 404 without a saved annex, or 503 when Chrome is not configured', function () {",
+                  "  if (pm.response.code === 200) {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');",
+                  "    pm.expect(pm.response.headers.get('Content-Disposition')).to.include('Fee_Annex_');",
+                  "  } else {",
+                  "    pm.expect([404, 503]).to.include(pm.response.code);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/fee-annex/pdf",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "fee-annex",
+                "pdf"
+              ]
+            },
+            "description": "Renders the latest saved version to an A4 PDF with headless Chromium (needs CHROME_PATH on the server; otherwise 503). JavaScript is off and all network requests are blocked while rendering. Hidden rows are left out; until the quote is approved the first line reads 'DRAFT — quote not approved'. 404 { message: 'Save a Fee Annex first.' } when nothing is saved. Filename: Fee_Annex_<QuoteName>_STRIKE_<id>.pdf. Use Send and Download."
+          }
+        },
+        {
+          "name": "Download Fee Annex DOCX",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('DOCX attachment or 404 without a saved annex', function () {",
+                  "  if (pm.response.code === 200) {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('wordprocessingml.document');",
+                  "    pm.expect(pm.response.headers.get('Content-Disposition')).to.include('Fee_Annex_');",
+                  "  } else {",
+                  "    pm.expect(pm.response.code).to.equal(404);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/fee-annex/docx",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "fee-annex",
+                "docx"
+              ]
+            },
+            "description": "Builds a Word document from the latest saved version (server-side, from the same sanitized HTML as the PDF): headings, inline bold/italic/underline, line breaks, nested and numbered lists, tables with merged cells and real column widths, and inline images. Hidden rows are left out; marked DRAFT until the quote is approved. Filename: Fee_Annex_<QuoteName>_STRIKE_<id>.docx. Use Send and Download."
+          }
+        },
+        {
           "name": "Delete Quote",
           "request": {
             "method": "DELETE",
