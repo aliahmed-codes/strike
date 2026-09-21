@@ -44,6 +44,7 @@
     "@types/luxon": "^3.7.5",
     "@types/node": "^22.15.18",
     "@types/pg": "^8.23.1",
+    "@types/sanitize-html": "^2.16.1",
     "eslint": "^9.26.0",
     "hot-hook": "^0.4.0",
     "pino-pretty": "^13.0.0",
@@ -57,10 +58,15 @@
     "@adonisjs/cors": "^2.2.1",
     "@adonisjs/lucid": "^21.6.1",
     "@vinejs/vine": "^3.0.1",
+    "cheerio": "^1.2.0",
+    "docx": "^9.7.1",
     "exceljs": "^4.4.0",
     "luxon": "^3.7.2",
+    "mammoth": "^1.12.3",
     "pg": "^8.23.0",
-    "reflect-metadata": "^0.2.2"
+    "puppeteer-core": "^25.11.0",
+    "reflect-metadata": "^0.2.2",
+    "sanitize-html": "^2.17.7"
   },
   "hotHook": {
     "boundaries": [
