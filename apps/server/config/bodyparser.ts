@@ -21,6 +21,8 @@ const bodyParserConfig = defineConfig({
    */
   json: {
     convertEmptyStringsToNull: true,
+    // Fee Annex documents can carry inline images, so JSON bodies may be large.
+    limit: '12mb',
     types: [
       'application/json',
       'application/json-patch+json',

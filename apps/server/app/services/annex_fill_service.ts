@@ -609,7 +609,7 @@ function sortAttributes($: CheerioAPI) {
   })
 }
 
-function canonical(html: string): string {
+export function canonicalAnnexHtml(html: string): string {
   const $ = cheerio.load(html, {}, false)
   sortAttributes($)
   return $.html()
@@ -659,7 +659,7 @@ export function fillAnnexHtml(html: string, data: QuoteLegalData): AnnexFillResu
 
 /** True when the saved annex no longer matches what filling it from the current quote data would produce. */
 export function isAnnexStale(saved: string, data: QuoteLegalData): boolean {
-  const normalized = canonical(sanitizeAnnexHtml(saved))
-  const refreshed = canonical(sanitizeAnnexHtml(fillAnnexHtml(normalized, data).html))
+  const normalized = canonicalAnnexHtml(sanitizeAnnexHtml(saved))
+  const refreshed = canonicalAnnexHtml(sanitizeAnnexHtml(fillAnnexHtml(normalized, data).html))
   return normalized !== refreshed
 }
