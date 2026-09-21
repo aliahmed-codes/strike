@@ -284,6 +284,35 @@ test.group('Quote Legal', () => {
     assert.isFalse(body.isApproved)
   })
 
+  test('the single source and funding currency columns count, not only the pivot lists', async ({
+    client,
+    assert,
+  }) => {
+    const { user, token } = await createUserWithToken()
+    const usd = await createCurrency('USD')
+    // Like a quote saved from the Summary tab: source currency is one value and
+    // no pivot rows exist for it.
+    const quote = await Quote.create({
+      name: 'Single Columns',
+      ownerId: user.id,
+      status: 'draft',
+      contractLengthYears: 2,
+      fxModel: 'traditional_fx',
+      selectedPricingStrategy: 'corridor_pricing',
+      defaultFeeCurrencyId: usd.id,
+      sourceCurrencyId: usd.id,
+      fundingCurrencyId: usd.id,
+    })
+    const corridor = await createCorridor('SC', 'Scotland')
+    await saveSetupFee(client, token, quote.id)
+    await addCorridor(client, token, quote.id, corridor.id)
+
+    const body = await getLegalBody(client, token, quote.id)
+    assert.deepEqual(body.blockers, [])
+    assert.deepEqual(body.sourceCurrencies, ['USD'])
+    assert.deepEqual(body.fundingCurrencies, ['USD'])
+  })
+
   test('only saved, non-deleted, positive-volume corridors are included', async ({
     client,
     assert,

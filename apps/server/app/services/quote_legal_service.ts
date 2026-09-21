@@ -149,7 +149,9 @@ function buildOtherLineItems(setupFee: QuoteSetupFee): LegalOtherLineItem[] {
 
 export async function buildLegalData(quote: Quote): Promise<QuoteLegalData> {
   await quote.load('defaultFeeCurrency')
+  await quote.load('fundingCurrency')
   await quote.load('fundingCurrencies')
+  await quote.load('sourceCurrency')
   await quote.load('sourceCurrencies')
   await quote.load('corridors', (q) => {
     q.withScopes((s) => s.priced())
@@ -168,8 +170,17 @@ export async function buildLegalData(quote: Quote): Promise<QuoteLegalData> {
 
   const blockers: string[] = []
   const feeCurrency = quote.defaultFeeCurrency ?? null
-  const fundingCurrencies = quote.fundingCurrencies.map((c) => c.isoCode3)
-  const sourceCurrencies = quote.sourceCurrencies.map((c) => c.isoCode3)
+  // The Summary tab saves funding currencies as a list and the source currency
+  // as a single value; each falls back to the other storage so neither form is missed.
+  const fundingCurrencies =
+    quote.fundingCurrencies.length > 0
+      ? quote.fundingCurrencies.map((c) => c.isoCode3)
+      : quote.fundingCurrency
+        ? [quote.fundingCurrency.isoCode3]
+        : []
+  const sourceCurrencies = quote.sourceCurrency
+    ? [quote.sourceCurrency.isoCode3]
+    : quote.sourceCurrencies.map((c) => c.isoCode3)
 
   if (quote.contractLengthYears === null)
     blockers.push('Contract length is not set on the Summary tab.')
