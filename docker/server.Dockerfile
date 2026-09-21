@@ -29,6 +29,11 @@ FROM node:22-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
+# Headless Chromium and fonts for rendering Fee Annex PDFs (puppeteer-core does
+# not download a browser). fonts-liberation gives Arial/Helvetica metrics.
+RUN apt-get update     && apt-get install -y --no-install-recommends chromium fonts-liberation fonts-noto-core     && rm -rf /var/lib/apt/lists/*
+ENV CHROME_PATH=/usr/bin/chromium
+
 # Production node_modules (workspace-aware, so the @strike/shared
 # symlink below resolves correctly).
 COPY --from=deps-prod /app/node_modules ./node_modules

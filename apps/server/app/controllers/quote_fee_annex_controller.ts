@@ -1,10 +1,14 @@
 import { readFile } from 'node:fs/promises'
 import type { HttpContext } from '@adonisjs/core/http'
 import mammoth from 'mammoth'
+import logger from '@adonisjs/core/services/logger'
 import Quote from '#models/quote'
 import QuoteFeeAnnexVersion from '#models/quote_fee_annex_version'
 import { canAccessQuote } from '#services/quote_access_service'
 import { buildLegalData } from '#services/quote_legal_service'
+import { AnnexPdfUnavailableError, buildAnnexPdf } from '#services/annex_pdf_service'
+import { buildAnnexDocx } from '#services/annex_docx_service'
+import { attachmentHeader } from '#services/attachment_header'
 import { fillAnnexHtml, isAnnexStale } from '#services/annex_fill_service'
 import { sanitizeAnnexHtml, sanitizeAnnexName } from '#services/annex_html_sanitizer'
 import {
@@ -23,6 +27,18 @@ async function loadAccessibleQuote(quoteId: number, userCanAccess: (quote: Quote
     return { error: { status: 403 as const, message: 'You do not have access to this quote' } }
   }
   return { quote }
+}
+
+const PDF_MIME = 'application/pdf'
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+/** Fee_Annex_<quote name>_STRIKE_<id>.<ext>, with only header-safe characters kept. */
+export function annexFileName(
+  quote: Pick<Quote, 'id' | 'name'>,
+  extension: 'pdf' | 'docx'
+): string {
+  const base = quote.name.replace(/\s+/g, '').replace(/[^A-Za-z0-9._-]/g, '') || `Quote_${quote.id}`
+  return `Fee_Annex_${base}_STRIKE_${quote.id}.${extension}`
 }
 
 const fieldError = (field: string, message: string) => ({ errors: [{ field, message }] })
@@ -165,5 +181,53 @@ export default class QuoteFeeAnnexController {
       warnings: result.warnings,
       fileName: file.clientName,
     })
+  }
+
+  async downloadPdf({ auth, params, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const { quote, error } = await loadAccessibleQuote(params.quoteId, (q) =>
+      canAccessQuote(user, q)
+    )
+    if (error) return response.status(error.status).send({ message: error.message })
+
+    const latest = await latestAnnexVersion(quote!.id)
+    if (!latest) return response.notFound({ message: 'Save a Fee Annex first.' })
+
+    try {
+      const pdf = await buildAnnexPdf(latest.content, {
+        name: latest.name,
+        isApproved: quote!.status === 'approved',
+      })
+      response.header('Content-Type', PDF_MIME)
+      response.header('Content-Disposition', attachmentHeader(annexFileName(quote!, 'pdf')))
+      return response.send(pdf)
+    } catch (renderError) {
+      if (renderError instanceof AnnexPdfUnavailableError) {
+        return response.serviceUnavailable({ message: renderError.message })
+      }
+      logger.error({ err: renderError, quoteId: quote!.id }, 'Fee Annex PDF rendering failed')
+      return response.internalServerError({
+        message: 'The PDF could not be generated. Please try again.',
+      })
+    }
+  }
+
+  async downloadDocx({ auth, params, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const { quote, error } = await loadAccessibleQuote(params.quoteId, (q) =>
+      canAccessQuote(user, q)
+    )
+    if (error) return response.status(error.status).send({ message: error.message })
+
+    const latest = await latestAnnexVersion(quote!.id)
+    if (!latest) return response.notFound({ message: 'Save a Fee Annex first.' })
+
+    const docx = await buildAnnexDocx(latest.content, {
+      name: latest.name,
+      isApproved: quote!.status === 'approved',
+    })
+    response.header('Content-Type', DOCX_MIME)
+    response.header('Content-Disposition', attachmentHeader(annexFileName(quote!, 'docx')))
+    return response.send(docx)
   }
 }

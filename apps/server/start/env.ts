@@ -28,4 +28,11 @@ export default await Env.create(new URL('../', import.meta.url), {
   DB_USER: Env.schema.string(),
   DB_PASSWORD: Env.schema.string.optional(),
   DB_DATABASE: Env.schema.string(),
+
+  /*
+  |----------------------------------------------------------
+  | Path to a Chrome/Chromium binary, used to render Fee Annex PDFs
+  |----------------------------------------------------------
+  */
+  CHROME_PATH: Env.schema.string.optional(),
 })

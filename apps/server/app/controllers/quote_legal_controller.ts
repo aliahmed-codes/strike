@@ -1,6 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Quote from '#models/quote'
 import { canAccessQuote } from '#services/quote_access_service'
+import { attachmentHeader } from '#services/attachment_header'
 import { buildLegalData } from '#services/quote_legal_service'
 import {
   buildLegalContractWorkbook,
@@ -45,12 +46,8 @@ export default class QuoteLegalController {
     }
 
     const fileName = legalContractFileName(data)
-    const asciiName = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, "'")
     response.header('Content-Type', XLSX_MIME)
-    response.header(
-      'Content-Disposition',
-      `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
-    )
+    response.header('Content-Disposition', attachmentHeader(fileName))
     return response.send(await buildLegalContractWorkbook(data))
   }
 }

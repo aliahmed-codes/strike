@@ -79,6 +79,8 @@ router
     router.put('/:quoteId/fee-annex', [QuoteFeeAnnexController, 'save'])
     router.post('/:quoteId/fee-annex/fill', [QuoteFeeAnnexController, 'fill'])
     router.post('/:quoteId/fee-annex/import', [QuoteFeeAnnexController, 'importFile'])
+    router.get('/:quoteId/fee-annex/pdf', [QuoteFeeAnnexController, 'downloadPdf'])
+    router.get('/:quoteId/fee-annex/docx', [QuoteFeeAnnexController, 'downloadDocx'])
   })
   .prefix('/quotes')
   .use(middleware.auth())

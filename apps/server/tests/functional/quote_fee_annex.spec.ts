@@ -1,11 +1,29 @@
 import { test } from '@japa/runner'
+import { ApiRequest } from '@japa/api-client'
 import { Document, Packer, Paragraph } from 'docx'
+import mammoth from 'mammoth'
 import User from '#models/user'
 import Currency from '#models/currency'
 import Quote from '#models/quote'
 import QuoteFeeAnnexVersion from '#models/quote_fee_annex_version'
+import {
+  AnnexPdfUnavailableError,
+  useAnnexPdfRenderer,
+  type AnnexPdfRenderer,
+} from '#services/annex_pdf_service'
 
 type Client = import('@japa/api-client').ApiClient
+
+for (const mime of [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]) {
+  ApiRequest.addParser(mime, (res, callback) => {
+    const chunks: Buffer[] = []
+    res.on('data', (chunk: Buffer) => chunks.push(chunk))
+    res.on('end', () => callback(null, Buffer.concat(chunks)))
+  })
+}
 
 async function createUserWithToken(role: 'admin' | 'sales' | 'viewer' = 'sales') {
   const user = await User.create({
@@ -366,5 +384,150 @@ test.group('Quote fee annex: import', () => {
       filename: 'a.html',
     })
     empty.assertStatus(422)
+  })
+})
+
+test.group('Quote fee annex: downloads', (group) => {
+  let original: AnnexPdfRenderer
+  const rendered: string[] = []
+
+  group.setup(() => {
+    original = useAnnexPdfRenderer({
+      render: async (html) => {
+        rendered.push(html)
+        return Buffer.from('%PDF-1.4 fake')
+      },
+    })
+  })
+  group.teardown(() => {
+    useAnnexPdfRenderer(original)
+  })
+
+  const ANNEX =
+    '<h1>Fee Annex</h1><p>Visible paragraph</p><p data-annex-hidden="1" style="display:none">HIDDEN TEXT</p><script>alert(1)</script>'
+
+  async function quoteWithAnnex(client: Client, quoteName = 'Acme Corp') {
+    const { user, token } = await createUserWithToken()
+    const quote = await createReadyQuote(user.id)
+    if (quoteName !== 'Acme Corp')
+      await Quote.query().where('id', quote.id).update({ name: quoteName })
+    const saved = await saveAnnex(client, token, quote.id, { name: 'Annex', content: ANNEX })
+    saved.assertStatus(200)
+    return { user, token, quote }
+  }
+
+  test('both downloads need a saved annex, a login and access', async ({ client }) => {
+    const { user, token } = await createUserWithToken()
+    const { token: other } = await createUserWithToken()
+    const quote = await createReadyQuote(user.id)
+
+    for (const kind of ['pdf', 'docx']) {
+      await expectStatus(client.get(`/quotes/${quote.id}/fee-annex/${kind}`), 401)
+      await expectStatus(
+        client.get(`/quotes/${quote.id}/fee-annex/${kind}`).header('Authorization', auth(token)),
+        404
+      )
+      await expectStatus(
+        client.get(`/quotes/${quote.id}/fee-annex/${kind}`).header('Authorization', auth(other)),
+        403
+      )
+    }
+  })
+
+  test('the PDF is rendered from the saved version, marked DRAFT until approved, with hidden content removed', async ({
+    client,
+    assert,
+  }) => {
+    const { token, quote } = await quoteWithAnnex(client)
+    rendered.length = 0
+
+    const response = await client
+      .get(`/quotes/${quote.id}/fee-annex/pdf`)
+      .header('Authorization', auth(token))
+    response.assertStatus(200)
+    assert.equal(response.header('content-type'), 'application/pdf')
+    assert.include(
+      response.header('content-disposition'),
+      `Fee_Annex_AcmeCorp_STRIKE_${quote.id}.pdf`
+    )
+    assert.include((response.body() as Buffer).toString('latin1'), '%PDF')
+
+    const html = rendered[0]
+    assert.include(html, 'Visible paragraph')
+    assert.include(html, 'DRAFT')
+    assert.include(html, "default-src 'none'")
+    assert.notInclude(html, 'HIDDEN TEXT')
+    assert.notInclude(html, 'alert(1)')
+
+    await Quote.query().where('id', quote.id).update({ status: 'approved' })
+    await client.get(`/quotes/${quote.id}/fee-annex/pdf`).header('Authorization', auth(token))
+    assert.notInclude(rendered[rendered.length - 1], 'DRAFT')
+  })
+
+  test('the file name stays header-safe for an awkward quote name', async ({ client, assert }) => {
+    const { token, quote } = await quoteWithAnnex(client, 'Acme "Corp" Ünï/x')
+    const response = await client
+      .get(`/quotes/${quote.id}/fee-annex/pdf`)
+      .header('Authorization', auth(token))
+    response.assertStatus(200)
+    assert.include(
+      response.header('content-disposition'),
+      `Fee_Annex_AcmeCorpnx_STRIKE_${quote.id}.pdf`
+    )
+    assert.notMatch(response.header('content-disposition'), /[\r\n]/)
+  })
+
+  test('a missing browser is a clear 503, and any other failure is a generic 500', async ({
+    client,
+    assert,
+  }) => {
+    const { token, quote } = await quoteWithAnnex(client)
+
+    const previous = useAnnexPdfRenderer({
+      render: async () => {
+        throw new AnnexPdfUnavailableError('PDF download is not configured on this server.')
+      },
+    })
+    const unavailable = await client
+      .get(`/quotes/${quote.id}/fee-annex/pdf`)
+      .header('Authorization', auth(token))
+    unavailable.assertStatus(503)
+    assert.include(unavailable.body().message, 'not configured')
+
+    useAnnexPdfRenderer({
+      render: async () => {
+        throw new Error('secret internal path C:/chrome crashed')
+      },
+    })
+    const failed = await client
+      .get(`/quotes/${quote.id}/fee-annex/pdf`)
+      .header('Authorization', auth(token))
+    failed.assertStatus(500)
+    assert.notInclude(failed.body().message, 'secret')
+    useAnnexPdfRenderer(previous)
+  })
+
+  test('the DOCX carries the saved annex, the DRAFT marker and no hidden content', async ({
+    client,
+    assert,
+  }) => {
+    const { token, quote } = await quoteWithAnnex(client)
+    const response = await client
+      .get(`/quotes/${quote.id}/fee-annex/docx`)
+      .header('Authorization', auth(token))
+    response.assertStatus(200)
+    assert.equal(
+      response.header('content-type'),
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+    assert.include(
+      response.header('content-disposition'),
+      `Fee_Annex_AcmeCorp_STRIKE_${quote.id}.docx`
+    )
+
+    const converted = await mammoth.convertToHtml({ buffer: response.body() as Buffer })
+    assert.include(converted.value, 'Visible paragraph')
+    assert.include(converted.value, 'DRAFT')
+    assert.notInclude(converted.value, 'HIDDEN TEXT')
   })
 })
