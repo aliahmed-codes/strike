@@ -2,6 +2,7 @@ import {
   buildCorridorRegionSummary,
   computeSetupFeeTotals,
   countUniqueCurrencyPairs,
+  type QuotePnlYear,
   type QuoteSummaryCorridor,
 } from '@strike/shared'
 import type Quote from '#models/quote'
@@ -34,6 +35,15 @@ async function loadSummaryCorridors(quote: Quote): Promise<QuoteSummaryCorridor[
   }))
 }
 
+/** Corridor-only view of a P&L year: setup and commitment fees are deliberately left out. */
+function toCorridorProjection(year: QuotePnlYear) {
+  return {
+    volume: year.principal,
+    transactions: year.transactions,
+    revenue: Math.round((year.feeRevenue + year.fxMargin) * 100) / 100,
+  }
+}
+
 export async function buildQuoteSummary(quote: Quote) {
   await quote.load('owner')
   await quote.load('partnerCountry', (q) => q.preload('region'))
@@ -46,7 +56,11 @@ export async function buildQuoteSummary(quote: Quote) {
   const financialProjections = await buildPnlResponse(quote)
   const setupFeeInputs = await loadSetupFeeInputs(quote)
 
-  const setupFee = await quote.related('setupFee').query().preload('paymentMilestones').first()
+  const setupFee = await quote
+    .related('setupFee')
+    .query()
+    .preload('paymentMilestones', (q) => q.orderBy('sortOrder', 'asc'))
+    .first()
 
   const setupFeeTotals = setupFeeInputs ? computeSetupFeeTotals(setupFeeInputs) : null
 
@@ -75,11 +89,15 @@ export async function buildQuoteSummary(quote: Quote) {
           year1CommittedRevenue: setupFeeTotals!.year1CommittedRevenue,
           finalCommitmentFee: setupFeeTotals!.finalCommitmentFee,
           paymentSchedule: setupFee.paymentSchedule,
-          paymentMilestones: setupFee.paymentMilestones.map((milestone) => ({
-            milestone: milestone.milestone,
-            percentage: Number(milestone.percentage),
-            description: milestone.description,
-          })),
+          // Rows can linger after a switch back to 'full'; they only apply to a custom schedule.
+          paymentMilestones:
+            setupFee.paymentSchedule === 'custom'
+              ? setupFee.paymentMilestones.map((milestone) => ({
+                  milestone: milestone.milestone,
+                  percentage: Number(milestone.percentage),
+                  description: milestone.description,
+                }))
+              : [],
         }
       : {
           feeType: null,
@@ -91,6 +109,11 @@ export async function buildQuoteSummary(quote: Quote) {
           paymentMilestones: [],
         },
     financialProjections,
+    corridorProjections: {
+      year1: toCorridorProjection(financialProjections.years.year1),
+      year2: toCorridorProjection(financialProjections.years.year2),
+      year3: toCorridorProjection(financialProjections.years.year3),
+    },
     corridorsByRegion,
     corridorsByRegionTotals,
     completeness: {

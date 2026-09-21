@@ -310,6 +310,11 @@ Source research for **P&L, Quoting Summary, Legal, and Approvals** is complete. 
 - 19 new functional tests (`quote_summary.spec.ts`) plus a dedicated unit-test file for the new shared math (`quote_summary_math.spec.ts`) — 188/188 backend tests passing, full workspace typecheck/lint/build green, manually verified end-to-end against a live dev server (multi-region corridors, a real setup fee, saved P&L growth inputs, partner-country resolution, and all error cases).
 - Frontend (Step 4) is not started — the placeholder at `QuoteEditorPage.tsx:175-177` is unchanged.
 
+**Phase 3a follow-up — backend fixes found while aligning the tab with the old screen (2026-09-21).** A code-level comparison against the old `QuotingSummary.tsx` (details in `docs/old-app-reference/remaining-quote-tabs.md` §4.5a) produced two backend changes:
+- **Stale payment milestones fixed at the source.** The Setup Fee save recreated milestones from the request on every save, and the client keeps its seeded 50%/50% rows in the form after switching back to a full schedule, so they persisted and a summary showed milestones under "full". `setup_fee_controller.ts` now stores milestones only when `paymentSchedule === 'custom'`; the summary also returns them only for a custom schedule (so rows already stale in the database stay hidden) and orders them by `sortOrder`.
+- **`corridorProjections` added to the summary response** — the old Financial Projections card is corridor revenue only (Year / Volume / Transactions / Revenue), unlike the P&L table where setup and commitment fees dominate. It is derived server-side from the same P&L years (`revenue = feeRevenue + fxMargin`), so Year 1 revenue equals the region-table total by construction and growth (including an explicit 0%) is inherited from P&L.
+- 4 new backend tests (192/192 passing), typecheck/lint/build green, verified against a live server.
+
 ### Phase 4 — Approvals (not started)
 
 Deliberately simple for v1: a quote has one approval record (approver, decision, comment, timestamp), no multi-step chain or auto-flagging engine yet — those depend on Roles & Permissions (item #5), which isn't built. `needs_approval`/`approval_reasons` per corridor already exist from Phase 1's pricing service.

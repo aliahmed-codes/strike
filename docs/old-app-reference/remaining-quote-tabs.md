@@ -224,6 +224,19 @@ Sources: `OLD/server/app/features/quotes/controllers/quote_documents_controller.
 - NEW's catalog type currently lacks several configurator metadata fields. This export is a separate integration contract, not the already-built Pricing table workbook.
 - The two controller download methods check quote visibility but not approved status; the Bulk Configurator restriction is currently in the frontend. NEW must enforce any required approval gating on the server.
 
+### 4.5a Screen-level facts verified for the frontend rebuild (2026-09-21)
+
+Source: `OLD/client/src/features/quotes/components/QuotingSummary.tsx` (3520 lines; JSX return 2279-2627).
+
+- **Header/intro (2280-2314):** `bg-primary` bar with "Quoting Summary" and a green pill "Using saved data from N corridor(s)" shown only when active corridors exist. Below it, either the paragraph "This tab provides a comprehensive summary of the pricing quote for {name}…" or a no-data panel whose title "Enhanced Summary Available" is misleading (it is the nothing-saved state).
+- **Layout (2316-2559):** two 2-column grids — Partner Information | Contract Details, then Setup Fees | Financial Projections — and a full-width Corridor Summary. Plain label/value tables, labels end in a colon; headers and total rows use `bg-primary-light text-primary`.
+- **Setup Fees (2400-2446):** "Set Up Fee:" or "Network Joining Fee:", "Total … Fee:" (same amount), "Payment Terms:" (`Due upon signature (100%)` / `50% upfront, 50% on go-live` / `Custom Payment Schedule`), and milestones only when the schedule is custom. The **"Discount:" row is dead code**: `discount` is hard-coded to 0 (209, 338), so it can never render. NEW has no one-off discount or list-price field at all.
+- **Working vs saved mix:** fee type and amounts come from working UI state while payment terms come from the saved setup-fee store, so the card can show values from two different moments. NEW reads saved data only (D1).
+- **Financial Projections (2457-2508):** Year / Volume / Transactions / Revenue for `min(contractLength, 3)` rows; Revenue is corridor revenue only. NEW mirrors this with a corridor-only projection (`corridorProjections` in the summary API) derived from the P&L years; setup and commitment fees stay on the P&L tab.
+- **Corridor Summary (2519-2557):** unknown region label is "Unknown"; the Total row leaves Avg. Fee and Avg. FX Spread blank.
+- **Buttons (2588-2625):** Generate Sales Quotation (always visible, never disabled, no loading label), Export for Bulk Configurator and Upload to Salesforce (approved only). All feedback is native `alert()`/`confirm()`.
+- **Rebuild data fix found while comparing:** stale payment milestones stayed in the database after switching a setup fee back to a full schedule, so a summary showed 50%/50% milestones under "full". NEW now stores milestones only for a custom schedule and the summary returns them only then, ordered by `sortOrder`.
+
 ### 4.6 What remains for NEW
 
 A read-only summary backed by canonical quote/setup/P&L values; region aggregation with agreed averages; explicit saved-versus-preview semantics; error/completeness indicators; and separately scoped official Sales Quotation/Configurator exports. No new “summary totals” database table is needed just to render the summary. Salesforce upload is a separate integration decision, not implicitly part of building this tab.

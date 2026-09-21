@@ -125,8 +125,10 @@ export default class SetupFeeController {
       }
     )
 
+    // Milestones only mean something on a custom schedule; the client keeps its
+    // seeded rows in the form after switching back to 'full', so drop them here.
     await setupFee.related('paymentMilestones').query().delete()
-    if (payload.paymentMilestones?.length) {
+    if (payload.paymentSchedule === 'custom' && payload.paymentMilestones?.length) {
       await setupFee
         .related('paymentMilestones')
         .createMany(payload.paymentMilestones.map((m, index) => ({ ...m, sortOrder: index })))

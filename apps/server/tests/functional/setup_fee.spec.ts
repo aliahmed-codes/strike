@@ -121,6 +121,44 @@ test.group('Setup Fee', () => {
     assert.lengthOf(body.otherFees, 7)
   })
 
+  test('keeps payment milestones only while the schedule is custom', async ({ client, assert }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await createDraftQuote(user.id)
+    const currency = await createCurrency()
+    const milestones = [
+      { milestone: 'On Contract Signature', percentage: 50 },
+      { milestone: 'Within 90 days', percentage: 50 },
+    ]
+
+    const customResponse = await client
+      .put(`/quotes/${quote.id}/setup-fee`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        ...buildValidPayload(currency.id),
+        paymentSchedule: 'custom',
+        paymentMilestones: milestones,
+      })
+    customResponse.assertStatus(200)
+    assert.lengthOf(customResponse.body().setupFee.paymentMilestones, 2)
+
+    // The client keeps its seeded rows in the form after switching back to 'full'.
+    const fullResponse = await client
+      .put(`/quotes/${quote.id}/setup-fee`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        ...buildValidPayload(currency.id),
+        paymentSchedule: 'full',
+        paymentMilestones: milestones,
+      })
+    fullResponse.assertStatus(200)
+    assert.lengthOf(fullResponse.body().setupFee.paymentMilestones, 0)
+
+    const getResponse = await client
+      .get(`/quotes/${quote.id}/setup-fee`)
+      .header('Authorization', `Bearer ${token}`)
+    assert.lengthOf(getResponse.body().setupFee.paymentMilestones, 0)
+  })
+
   test('rejects updating a non-draft quote', async ({ client }) => {
     const { token, user } = await createUserWithToken()
     const quote = await createDraftQuote(user.id)

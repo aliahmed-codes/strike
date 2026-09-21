@@ -5,6 +5,24 @@ import Country from '#models/country'
 import Currency from '#models/currency'
 import Corridor from '#models/corridor'
 import Quote from '#models/quote'
+import QuoteSetupFee from '#models/quote_setup_fee'
+import QuotePaymentMilestone from '#models/quote_payment_milestone'
+
+function setupFeePayload(overrides: Record<string, unknown> = {}) {
+  return {
+    feeType: 'setup',
+    quotedPrice: 100_000,
+    paymentSchedule: 'full',
+    joiningFeeBillingType: 'at_signing',
+    mcfType: 'standard',
+    mcfBillingStart: 'at_signing',
+    standardCommitmentFee: 100,
+    commitmentFeeDiscountPct: 0,
+    waivedMonths: 0,
+    rebateIncentive: false,
+    ...overrides,
+  }
+}
 
 async function createUserWithToken(role: 'admin' | 'sales' | 'viewer' = 'sales') {
   const user = await User.create({
@@ -490,5 +508,105 @@ test.group('Quote Summary', () => {
     response.assertStatus(200)
     assert.equal(response.body().partner.partnerType, 'New partner')
     assert.equal(response.body().partner.ownerName, 'Test User')
+  })
+
+  test('hides payment milestones left over from a custom schedule when the schedule is full', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await createDraftQuote(user.id)
+
+    await client
+      .put(`/quotes/${quote.id}/setup-fee`)
+      .header('Authorization', `Bearer ${token}`)
+      .json(setupFeePayload({ paymentSchedule: 'full' }))
+
+    const setupFee = await QuoteSetupFee.findByOrFail('quoteId', quote.id)
+    await QuotePaymentMilestone.createMany([
+      {
+        quoteSetupFeeId: setupFee.id,
+        milestone: 'On Contract Signature',
+        percentage: 50,
+        sortOrder: 0,
+      },
+      { quoteSetupFeeId: setupFee.id, milestone: 'Within 90 days', percentage: 50, sortOrder: 1 },
+    ])
+
+    const response = await client
+      .get(`/quotes/${quote.id}/summary`)
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    assert.equal(response.body().setupFee.paymentSchedule, 'full')
+    assert.deepEqual(response.body().setupFee.paymentMilestones, [])
+  })
+
+  test('lists custom-schedule milestones in their saved order', async ({ client, assert }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await createDraftQuote(user.id)
+
+    await client
+      .put(`/quotes/${quote.id}/setup-fee`)
+      .header('Authorization', `Bearer ${token}`)
+      .json(
+        setupFeePayload({
+          paymentSchedule: 'custom',
+          paymentMilestones: [
+            { milestone: 'First', percentage: 40 },
+            { milestone: 'Second', percentage: 60, description: 'Go-live' },
+          ],
+        })
+      )
+    // Insertion order must not decide the result — sortOrder does.
+    await QuotePaymentMilestone.query().where('milestone', 'First').update({ sortOrder: 5 })
+
+    const response = await client
+      .get(`/quotes/${quote.id}/summary`)
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    const milestones = response.body().setupFee.paymentMilestones
+    assert.deepEqual(
+      milestones.map((m: { milestone: string }) => m.milestone),
+      ['Second', 'First']
+    )
+    assert.equal(milestones[0].description, 'Go-live')
+    assert.equal(milestones[0].percentage, 60)
+  })
+
+  test('corridor projections cover corridor revenue only and tie to the region totals', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const quote = await createDraftQuote(user.id)
+    const { corridor } = await createCorridor('H')
+    await addCorridor(client, token, quote.id, corridor.id)
+    // A large setup fee and commitment fee must not leak into corridor revenue.
+    await client
+      .put(`/quotes/${quote.id}/setup-fee`)
+      .header('Authorization', `Bearer ${token}`)
+      .json(setupFeePayload({ quotedPrice: 500_000, standardCommitmentFee: 10_000 }))
+    await client
+      .put(`/quotes/${quote.id}/pnl`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ year2GrowthPct: 10, year3GrowthPct: 0 })
+
+    const response = await client
+      .get(`/quotes/${quote.id}/summary`)
+      .header('Authorization', `Bearer ${token}`)
+
+    response.assertStatus(200)
+    const { corridorProjections, corridorsByRegionTotals } = response.body()
+    assert.equal(corridorProjections.year1.revenue, corridorsByRegionTotals.projectedRevenueUsd)
+    assert.equal(corridorProjections.year1.volume, corridorsByRegionTotals.expectedVolumeUsd)
+    assert.equal(corridorProjections.year1.transactions, 10_000)
+    // Fixture corridor: 1_000_000 volume -> 20_000 revenue in Year 1.
+    assert.equal(corridorProjections.year1.revenue, 20_000)
+    assert.equal(corridorProjections.year2.revenue, 22_000)
+    assert.equal(corridorProjections.year2.volume, 1_100_000)
+    // An explicit 0% Year 3 growth stays flat at Year 2, never a guessed default.
+    assert.equal(corridorProjections.year3.revenue, 22_000)
   })
 })
