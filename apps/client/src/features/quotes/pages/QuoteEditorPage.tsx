@@ -12,6 +12,7 @@ import { PricingTab } from '../components/PricingTab'
 import { SetupFeeTab } from '../components/SetupFeeTab'
 import { PnlTab } from '../components/PnlTab'
 import { QuotingSummaryTab } from '../components/QuotingSummaryTab'
+import { LegalTab } from '../components/LegalTab'
 import { PlaceholderTab } from '../components/PlaceholderTab'
 
 export function QuoteEditorPage() {
@@ -177,7 +178,7 @@ export function QuoteEditorPage() {
           <QuotingSummaryTab quoteId={tab.quoteId} />
         </TabsContent>
         <TabsContent value="legal" className="mt-4">
-          <PlaceholderTab title="Legal" />
+          <LegalTab quoteId={tab.quoteId} />
         </TabsContent>
         <TabsContent value="approvals" className="mt-4">
           <PlaceholderTab title="Approvals" />
