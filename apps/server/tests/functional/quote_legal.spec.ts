@@ -284,6 +284,77 @@ test.group('Quote Legal', () => {
     assert.isFalse(body.isApproved)
   })
 
+  test('exposes the annex fields: country code, volume, block months and every other fee', async ({
+    client,
+    assert,
+  }) => {
+    const { user, token } = await createUserWithToken()
+    const { quote, usd } = await createReadyQuote(user.id)
+    const corridor = await createCorridor('AN', 'Annexland')
+    await addCorridor(client, token, quote.id, corridor.id, {
+      pricingModel: 'tiered',
+      tiers: [
+        {
+          tierNumber: 1,
+          yearlyVolumeUsd: 400_000,
+          fixedFeeUsd: 0.4,
+          variableFeePct: 0.4,
+          appliedFxSpread: 0.4,
+        },
+        {
+          tierNumber: 2,
+          yearlyVolumeUsd: 300_000,
+          fixedFeeUsd: 0.3,
+          variableFeePct: 0.3,
+          appliedFxSpread: 0.3,
+        },
+      ],
+    })
+    await saveSetupFee(client, token, quote.id, {
+      mcfBlockFees: [
+        { blockKey: 'y1_h1', commitmentFee: 100 },
+        { blockKey: 'y1_h2', commitmentFee: 150 },
+        { blockKey: 'y2', commitmentFee: 200 },
+        { blockKey: 'y3', commitmentFee: 300 },
+      ],
+      otherFees: [
+        { conceptCode: 'reversal_request', amount: 0, isPercentage: false },
+        { conceptCode: 'treasury_management', amount: 0.1, isPercentage: true, currencyId: usd.id },
+      ],
+    })
+
+    const body = await getLegalBody(client, token, quote.id)
+    assert.equal(body.corridorRows[0].countryCode, 'ANX')
+    assert.deepEqual(
+      body.corridorRows.map((r: { yearlyVolumeUsd: number }) => r.yearlyVolumeUsd),
+      [400_000, 300_000]
+    )
+    assert.deepEqual(
+      body.commitment.blocks.map((b: { startMonth: number; endMonth: number }) => [
+        b.startMonth,
+        b.endMonth,
+      ]),
+      [
+        [1, 6],
+        [7, 12],
+        [13, 24],
+        [25, 36],
+      ]
+    )
+    // Zeros stay in the map (the line-item list drops them) so a waiver can print as $0.
+    assert.deepEqual(body.otherFees.reversal_request, {
+      amount: 0,
+      isPercentage: false,
+      currencyCode: null,
+    })
+    assert.deepEqual(body.otherFees.treasury_management, {
+      amount: 0.1,
+      isPercentage: true,
+      currencyCode: 'USD',
+    })
+    assert.isUndefined(body.otherFees.white_glove)
+  })
+
   test('the single source and funding currency columns count, not only the pivot lists', async ({
     client,
     assert,

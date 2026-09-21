@@ -17,6 +17,7 @@ import {
   type LegalCommitment,
   type LegalCommitmentBlock,
   type LegalCorridorRow,
+  type LegalOtherFees,
   type LegalOtherLineItem,
   type LegalPaymentTerms,
   type OtherFeeConcept,
@@ -46,6 +47,25 @@ function blockLabel(blockKey: string): string {
   return `Months ${(year - 1) * 12 + 1}-${year * 12}`
 }
 
+function blockMonths(blockKey: string): { startMonth: number; endMonth: number } {
+  if (blockKey === 'y1_h1') return { startMonth: 1, endMonth: 6 }
+  if (blockKey === 'y1_h2') return { startMonth: 7, endMonth: 12 }
+  const year = Number(blockKey.replace('y', ''))
+  return { startMonth: (year - 1) * 12 + 1, endMonth: year * 12 }
+}
+
+function buildOtherFees(setupFee: QuoteSetupFee): LegalOtherFees {
+  const fees: LegalOtherFees = {}
+  for (const fee of setupFee.otherFees) {
+    fees[fee.conceptCode as OtherFeeConcept] = {
+      amount: Number(fee.amount),
+      isPercentage: fee.isPercentage,
+      currencyCode: fee.currency?.isoCode3 ?? null,
+    }
+  }
+  return fees
+}
+
 function buildCommitment(
   setupFee: QuoteSetupFee,
   monthlyFees: number[],
@@ -61,6 +81,8 @@ function buildCommitment(
         label: slot.endMonth
           ? `Months ${slot.startMonth}-${slot.endMonth}`
           : `Month ${slot.startMonth} onwards`,
+        startMonth: slot.startMonth,
+        endMonth: slot.endMonth ?? null,
         commitmentFee: null,
         monthlyPrincipal: Number(slot.monthlyPrincipal),
         ratePct: Number(slot.ratePct),
@@ -76,6 +98,7 @@ function buildCommitment(
     }
     blocks = keys.map((key) => ({
       label: blockLabel(key),
+      ...blockMonths(key),
       commitmentFee: feeByKey.get(key) ?? finalCommitmentFee,
       monthlyPrincipal: null,
       ratePct: null,
@@ -214,6 +237,7 @@ export async function buildLegalData(quote: Quote): Promise<QuoteLegalData> {
       row.pricingModel === 'tiered' && row.tiers.length > 0
         ? row.tiers.map((tier) => ({
             tier: tier.tierNumber,
+            yearlyVolumeUsd: Number(tier.yearlyVolumeUsd),
             fixedFeeUsd: Number(tier.fixedFeeUsd),
             variableFeePct: Number(tier.variableFeePct),
             appliedFxSpread: Number(tier.appliedFxSpread),
@@ -221,6 +245,7 @@ export async function buildLegalData(quote: Quote): Promise<QuoteLegalData> {
         : [
             {
               tier: null,
+              yearlyVolumeUsd: Number(row.yearlyVolumeUsd),
               fixedFeeUsd: Number(row.fixedFeeUsd),
               variableFeePct: Number(row.variableFeePct),
               appliedFxSpread: Number(row.appliedFxSpread),
@@ -232,6 +257,7 @@ export async function buildLegalData(quote: Quote): Promise<QuoteLegalData> {
       if (converted === null && conversionCurrency) missingRate = true
       rows.push({
         country: catalog.country.name,
+        countryCode: catalog.country.isoCode3,
         service: catalog.serviceCode,
         transactionType: catalog.transactionTypeCode,
         payoutCurrency: catalog.payoutCurrency.isoCode3,
@@ -240,6 +266,7 @@ export async function buildLegalData(quote: Quote): Promise<QuoteLegalData> {
           ? (row.fundingCurrency?.isoCode3 ?? null)
           : null,
         tier: term.tier,
+        yearlyVolumeUsd: term.yearlyVolumeUsd,
         feeCurrency: feeCurrency?.isoCode3 ?? '',
         fixedFee: converted === null ? 0 : round3(converted),
         variableFeePct: term.variableFeePct,
@@ -270,6 +297,7 @@ export async function buildLegalData(quote: Quote): Promise<QuoteLegalData> {
   let commitment: LegalCommitment | null = null
   let payment: LegalPaymentTerms | null = null
   let otherLineItems: LegalOtherLineItem[] = []
+  let otherFees: LegalOtherFees = {}
   let oneOffFee: QuoteLegalData['oneOffFee'] = null
 
   if (setupFee) {
@@ -280,6 +308,7 @@ export async function buildLegalData(quote: Quote): Promise<QuoteLegalData> {
     }
     payment = buildPayment(setupFee)
     otherLineItems = buildOtherLineItems(setupFee)
+    otherFees = buildOtherFees(setupFee)
     const amount = Number(setupFee.quotedPrice)
     oneOffFee = {
       feeType: setupFee.feeType,
@@ -304,6 +333,7 @@ export async function buildLegalData(quote: Quote): Promise<QuoteLegalData> {
     sourceCurrencies,
     oneOffFee,
     otherLineItems,
+    otherFees,
     showFxSpread: quote.showFxSpreadInContract,
     showFxSource: quote.showFxSourceInContract,
     corridorRows: rows,
