@@ -3,7 +3,7 @@ import { DateTime } from 'luxon'
 import type User from '#models/user'
 import Quote from '#models/quote'
 import QuoteSetupFee from '#models/quote_setup_fee'
-import { canAccessQuote } from '#services/quote_access_service'
+import { canAccessQuote, isQuoteEditable } from '#services/quote_access_service'
 import { computeSetupFee, validateSetupFeeConsistency } from '#services/setup_fee_pricing_service'
 import { updateSetupFeeValidator } from '#validators/setup_fee'
 
@@ -54,7 +54,7 @@ export default class SetupFeeController {
     const { quote, error } = await loadAccessibleQuote(params.quoteId, user)
     if (error) return response.status(error.status).send({ message: error.message })
 
-    if (quote!.status !== 'draft') {
+    if (!isQuoteEditable(quote!)) {
       return response.conflict({ message: 'Quote is not editable in its current status' })
     }
 

@@ -1110,6 +1110,172 @@
           }
         },
         {
+          "name": "Preview Quote Approval Needs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/approvals/preview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "approvals",
+                "preview"
+              ]
+            },
+            "description": "Read-only preview of what submitting this quote now would route to, without creating anything: { networkTeam: [...], pricingTeam: [...], managerTarget: { userId, reasons } | null }. Reuses the same server-computed corridor/P&L/Setup-Fee approval flags a real submission would use — no separate discrepancy engine."
+          }
+        },
+        {
+          "name": "List Quote Approvals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/approvals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "approvals"
+              ]
+            },
+            "description": "All approval requests for the quote (any submission), newest first: { status, approvals: [{ id, group, targetUserId, status, reason, businessImpact, valueImpact, snapshotReasons, initiatorName, decidedByName, decisionComment, canDecide, history, createdAt, updatedAt }] }. `snapshotReasons` is live-refiltered against current corridor state (a corridor that has since gone to zero volume or been deleted disappears from an old submission's evidence too) without mutating the stored row. `canDecide` reflects the calling user."
+          }
+        },
+        {
+          "name": "Submit Quote for Approval",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Submitted (201) or blocked with a clear reason (422/409)', function () {",
+                  "  pm.expect([201, 409, 422]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Discounted pricing for a strategic partner\",\n  \"businessImpact\": \"Keeps a key account\",\n  \"valueImpact\": \"$50,000/yr\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/approvals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "approvals"
+              ]
+            },
+            "description": "Owner or admin only, and only from draft/rejected. Requires priced corridors, a saved Setup Fee, and a saved Fee Annex (422 with a specific message otherwise — enforced server-side, unlike the old app's client-only check). If nothing needs approval, auto-approves immediately with honest system attribution (`decidedByName: null`) and the quote goes straight to `approved`. Otherwise creates one pending row per group (network_team/pricing_team) or per manager-target (a custom payment schedule additionally targets the quote owner's manager) and the quote goes to `submitted`. 409 if the quote isn't draft/rejected."
+          }
+        },
+        {
+          "name": "Decide Quote Approval",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Decided (200), already decided (409), or not an approver (403)', function () {",
+                  "  pm.expect([200, 403, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"approve\",\n  \"comment\": \"Looks fine\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/approvals/{{approval_id}}/decide",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "approvals",
+                "{{approval_id}}",
+                "decide"
+              ]
+            },
+            "description": "`action` is 'approve' or 'reject'. Only an admin, a user whose `approvalGroup` matches this row's group, or the specific targeted manager may decide (403 otherwise) — access to the quote itself is not required. Transactional with a pending-status guard: deciding an already-decided row 409s. Approving the last pending row for a submission moves the quote to `approved`; rejecting immediately withdraws every other pending row from the same submission and moves the quote to `rejected`."
+          }
+        },
+        {
+          "name": "Withdraw Quote Approval Submission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/quotes/{{quote_id}}/approvals/withdraw",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "quotes",
+                "{{quote_id}}",
+                "approvals",
+                "withdraw"
+              ]
+            },
+            "description": "Owner or admin only, and only while the quote is `submitted`. Cancels every pending row (marks them `withdrawn`) and returns the quote to `draft`. 409 if there is nothing outstanding to withdraw."
+          }
+        },
+        {
           "name": "Delete Quote",
           "request": {
             "method": "DELETE",

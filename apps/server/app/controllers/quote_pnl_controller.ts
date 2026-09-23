@@ -2,7 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import type User from '#models/user'
 import Quote from '#models/quote'
 import QuotePnlInput from '#models/quote_pnl_input'
-import { canAccessQuote } from '#services/quote_access_service'
+import { canAccessQuote, isQuoteEditable } from '#services/quote_access_service'
 import { buildPnlResponse } from '#services/quote_pnl_service'
 import { updateQuotePnlValidator } from '#validators/quote_pnl'
 
@@ -31,7 +31,7 @@ export default class QuotePnlController {
     const { quote, error } = await loadAccessibleQuote(params.quoteId, user)
     if (error) return response.status(error.status).send({ message: error.message })
 
-    if (quote!.status !== 'draft') {
+    if (!isQuoteEditable(quote!)) {
       return response.conflict({ message: 'Quote is not editable in its current status' })
     }
 

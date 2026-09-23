@@ -1,6 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Quote from '#models/quote'
-import { canAccessQuote } from '#services/quote_access_service'
+import { canAccessQuote, isQuoteEditable } from '#services/quote_access_service'
 import { computeQuoteTotals } from '#services/quote_pricing_service'
 import { createQuoteValidator, updateQuoteValidator } from '#validators/quote'
 
@@ -113,7 +113,7 @@ export default class QuotesController {
     if (!canAccessQuote(user, quote)) {
       return response.forbidden({ message: 'You do not have access to this quote' })
     }
-    if (quote.status !== 'draft') {
+    if (!isQuoteEditable(quote)) {
       return response.conflict({ message: 'Quote is not editable in its current status' })
     }
 
@@ -141,7 +141,7 @@ export default class QuotesController {
     if (!canAccessQuote(user, quote)) {
       return response.forbidden({ message: 'You do not have access to this quote' })
     }
-    if (quote.status !== 'draft') {
+    if (!isQuoteEditable(quote)) {
       return response.conflict({ message: 'Quote is not editable in its current status' })
     }
 

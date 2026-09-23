@@ -5,7 +5,7 @@ import Quote from '#models/quote'
 import QuoteCorridor from '#models/quote_corridor'
 import QuoteCorridorTier from '#models/quote_corridor_tier'
 import Corridor from '#models/corridor'
-import { canAccessQuote } from '#services/quote_access_service'
+import { canAccessQuote, isQuoteEditable } from '#services/quote_access_service'
 import {
   computeCorridorPricing,
   computeTieredCorridorPricing,
@@ -39,7 +39,7 @@ async function loadEditableQuote(quoteId: number, user: User) {
   if (!canAccessQuote(user, quote)) {
     return { error: { status: 403 as const, message: 'You do not have access to this quote' } }
   }
-  if (quote.status !== 'draft') {
+  if (!isQuoteEditable(quote)) {
     return {
       error: { status: 409 as const, message: 'Quote is not editable in its current status' },
     }
