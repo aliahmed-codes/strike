@@ -59,12 +59,27 @@ function serializeApproval(approval: QuoteApproval, viewer: User) {
 export default class QuoteApprovalsController {
   async index({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const { quote, error } = await loadAccessibleQuote(params.quoteId, user)
-    if (error) return response.status(error.status).send({ message: error.message })
+    const quote = await Quote.find(params.quoteId)
+    if (!quote) return response.notFound({ message: 'Quote not found' })
 
-    const approvals = await listApprovalsForQuote(quote!)
+    const approvals = await listApprovalsForQuote(quote)
+
+    // A quote's approvals are visible to its owner/admin, and to anyone
+    // relevant to at least one row on it (an eligible or past decider, the
+    // initiator, or a manager target) — an approver need not own the quote.
+    const isRelevantApprover = approvals.some(
+      (a) =>
+        canDecideApproval(user, a) ||
+        a.initiatorId === user.id ||
+        a.decidedById === user.id ||
+        a.targetUserId === user.id
+    )
+    if (!canAccessQuote(user, quote) && !isRelevantApprover) {
+      return response.forbidden({ message: 'You do not have access to this quote' })
+    }
+
     return response.ok({
-      status: quote!.status,
+      status: quote.status,
       approvals: approvals.map((a) => serializeApproval(a, user)),
     })
   }

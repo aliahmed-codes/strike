@@ -45,7 +45,13 @@ async function parseFacetFilters(qs: Record<string, unknown>): Promise<CorridorF
 
 export default class ReferenceDataController {
   async regions() {
-    return Region.query().orderBy('name')
+    // Only regions that actually have at least one country assigned — the
+    // regions table carries a few legacy/superseded rows (e.g. "Asia",
+    // "Middle east", "Central&South America") that no country references
+    // any more. The old app's region picker is derived live from corridor
+    // data, so it never offers a region with nothing under it; mirror that
+    // here instead of surfacing dead options with an empty country list.
+    return Region.query().has('countries').orderBy('name')
   }
 
   async countries() {

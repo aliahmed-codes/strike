@@ -13,7 +13,7 @@ import { SetupFeeTab } from '../components/SetupFeeTab'
 import { PnlTab } from '../components/PnlTab'
 import { QuotingSummaryTab } from '../components/QuotingSummaryTab'
 import { LegalTab } from '../components/LegalTab'
-import { PlaceholderTab } from '../components/PlaceholderTab'
+import { ApprovalsTab } from '../components/ApprovalsTab'
 
 export function QuoteEditorPage() {
   const { tabKey } = useParams<{ tabKey: string }>()
@@ -181,7 +181,7 @@ export function QuoteEditorPage() {
           <LegalTab quoteId={tab.quoteId} />
         </TabsContent>
         <TabsContent value="approvals" className="mt-4">
-          <PlaceholderTab title="Approvals" />
+          <ApprovalsTab quoteId={tab.quoteId} />
         </TabsContent>
       </Tabs>
     </div>

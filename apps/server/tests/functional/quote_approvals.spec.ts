@@ -413,6 +413,27 @@ test.group('Quote approvals: decide', () => {
     }
   }
 
+  test('a matching approval_group member can list a quote they do not own, and an unrelated user still cannot', async ({
+    client,
+    assert,
+  }) => {
+    const { quote } = await submitWithException(client)
+    const { token: rightGroupToken } = await createUser({ approvalGroup: 'pricing_team' })
+    const { token: unrelatedToken } = await createUser({ approvalGroup: 'network_team' })
+
+    const asApprover = await client
+      .get(`/quotes/${quote.id}/approvals`)
+      .header('Authorization', auth(rightGroupToken))
+    asApprover.assertStatus(200)
+    assert.lengthOf(asApprover.body().approvals, 1)
+    assert.isTrue(asApprover.body().approvals[0].canDecide)
+
+    const asUnrelated = await client
+      .get(`/quotes/${quote.id}/approvals`)
+      .header('Authorization', auth(unrelatedToken))
+    asUnrelated.assertStatus(403)
+  })
+
   test('only an admin or a matching approval_group member can decide; others get 403', async ({
     client,
   }) => {
