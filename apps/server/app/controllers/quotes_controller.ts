@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Quote from '#models/quote'
 import { canAccessQuote, isQuoteEditable } from '#services/quote_access_service'
 import { computeQuoteTotals } from '#services/quote_pricing_service'
+import { computeMbpForCorridors, fetchAllMbpReferenceData } from '#services/mbp_pricing_service'
 import { createQuoteValidator, updateQuoteValidator } from '#validators/quote'
 
 type QuotePivotFields = {
@@ -96,6 +97,22 @@ export default class QuotesController {
       q.preload('fundingCurrency')
       q.preload('tiers', (tq) => tq.orderBy('tierNumber'))
     })
+
+    // Market-Based Pricing — computed fresh on every fetch (not read from
+    // storage), so the badge/hint on each corridor always reflects the
+    // quote's *current* Sending Partner Region/ICP category, even if it
+    // hasn't matched what's actually saved on that row since the last
+    // edit. One bulk fetch of the (tiny) rule tables, reused across every
+    // corridor on the quote — see `fetchAllMbpReferenceData`.
+    const mbpData = await fetchAllMbpReferenceData()
+    const mbpByCorridorId = computeMbpForCorridors(
+      quote.corridors.map((qc) => qc.corridor),
+      quote,
+      mbpData
+    )
+    for (const qc of quote.corridors) {
+      qc.$extras.mbp = mbpByCorridorId.get(qc.corridor.id) ?? null
+    }
 
     return response.ok({
       quote: quote.serialize(),

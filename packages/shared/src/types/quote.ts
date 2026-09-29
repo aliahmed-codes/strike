@@ -1,4 +1,5 @@
 import type { QuoteTotals } from '../lib/quote_totals_math.js'
+import type { MbpAdjustmentResult } from '../lib/mbp_pricing_math.js'
 
 export type QuoteStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'closed'
 
@@ -74,6 +75,8 @@ export interface Corridor {
   stdVariableFeePct: number | null
   /** A real historical average transaction value for this corridor — null for the ~49% the old app's own ATV data never covered. */
   historicalAtv: number | null
+  /** Market-Based Pricing preview — only present when `matchingCorridors` was called with a `quoteId` (see `useMatchingCorridors`); otherwise absent/undefined. */
+  mbp?: MbpAdjustmentResult | null
 }
 
 export type PricingModel = 'standard' | 'tiered'
@@ -153,6 +156,16 @@ export interface QuoteCorridor extends QuoteCorridorInput {
   financialApprovalReasons: string[] | null
   needsNetworkApproval: boolean
   networkApprovalReasons: string[] | null
+  /**
+   * False = `fixedFeeUsd` still follows the live Market-Based Pricing (MBP)
+   * recommendation and gets recomputed on every save. True = a human typed
+   * their own value into the Fixed Fee cell (or re-synced it to something
+   * other than the current MBP/catalog answer), so it no longer
+   * auto-follows MBP.
+   */
+  fixedFeeManuallySet: boolean
+  /** The live Market-Based Pricing result for this row, recomputed fresh on every `GET /quotes/:id` — not a stored snapshot, so it always reflects the quote's *current* Sending Partner Region/ICP category, whether or not that matches what's actually saved on this row. `null` = no rule currently matches (plain catalog fee applies). */
+  mbp: MbpAdjustmentResult | null
   corridor?: Corridor
   fundingCurrency?: Currency
   tiers?: QuoteCorridorTier[]

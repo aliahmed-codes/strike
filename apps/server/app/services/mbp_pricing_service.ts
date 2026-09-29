@@ -1,6 +1,8 @@
 import {
   computeMbpAdjustment,
+  isFixedFeeManuallySet,
   matchesTransactionType,
+  resolveMbpFee,
   type MbpAdjustmentResult,
   type MbpMatchContext,
   type MbpReferenceData,
@@ -18,37 +20,26 @@ import StrategicOverride from '#models/strategic_override'
  * The Market-Based Pricing (MBP) matching logic itself lives in
  * `@strike/shared` (pure, no database access — see FEATURES.md/Phase notes
  * and docs/old-app-reference for the investigation). This file is the
- * server-only seam: it fetches the handful of rule rows relevant to one
- * corridor+quote combination and calls the shared matcher, following the
- * same re-export convention as `quote_pricing_service.ts`.
+ * server-only seam: it fetches the rule rows and calls the shared matcher,
+ * following the same re-export convention as `quote_pricing_service.ts`.
  */
-export { computeMbpAdjustment, matchesTransactionType }
+export { computeMbpAdjustment, isFixedFeeManuallySet, matchesTransactionType, resolveMbpFee }
 export type { MbpAdjustmentResult, MbpMatchContext, MbpReferenceData }
 
 /**
- * Fetches only the rule rows that could possibly apply to this one
- * combination — narrow `.where(...)` queries, not full-table scans. The
- * reference tables are tiny (a few hundred rows total across all 6), so
- * this is cheap to run on every price/save.
+ * Loads every row of all 6 MBP reference tables, unfiltered — they're tiny
+ * (~370 rows total combined), so this is cheap to run once per request and
+ * reuse across every corridor being priced/previewed in that request,
+ * rather than re-querying per corridor (see `computeMbpForCorridors`).
  */
-export async function fetchMbpReferenceData(ctx: {
-  countryId: number
-  regionId: number | null
-  icpLevel1Id: number | null
-  icpLevel3Id: number | null
-}): Promise<MbpReferenceData> {
+export async function fetchAllMbpReferenceData(): Promise<MbpReferenceData> {
   const [countryTiers, regionPressures, icpSensitivities, decisionMatrix, gridFeeAdjustments, strategicOverrides] =
     await Promise.all([
-      CountryTier.query().where('countryId', ctx.countryId),
-      ctx.regionId !== null ? RegionPressure.query().where('regionId', ctx.regionId) : Promise.resolve([]),
-      ctx.icpLevel3Id !== null
-        ? IcpSensitivity.query().where('icpNodeIdL3', ctx.icpLevel3Id)
-        : Promise.resolve([]),
-      // Only 9 rows ever — cheap to always fetch in full.
+      CountryTier.all(),
+      RegionPressure.all(),
+      IcpSensitivity.all(),
       DecisionMatrixEntry.all(),
-      ctx.icpLevel1Id !== null
-        ? GridFeeAdjustment.query().where('icpNodeIdL1', ctx.icpLevel1Id)
-        : Promise.resolve([]),
+      GridFeeAdjustment.all(),
       StrategicOverride.query().where('isActive', true),
     ])
 
@@ -106,39 +97,52 @@ export async function fetchMbpReferenceData(ctx: {
   }
 }
 
+/** A quote's Sending Partner Region + ICP category — the quote-level half of an MBP match context, shared by every corridor on that quote. */
+function quoteMbpContext(quote: Quote) {
+  return {
+    regionId: quote.partnerCountry?.regionId ?? null,
+    icpLevel1Id: quote.icpLevel1Id,
+    icpLevel2Id: quote.icpLevel2Id,
+    icpLevel3Id: quote.icpLevel3Id,
+  }
+}
+
 /**
- * The full MBP lookup for one corridor on one quote — the quote supplies
- * the Sending Partner Region + ICP category, the corridor supplies its own
- * country (for tier) and transaction type. Returns `null` when nothing
- * matches (the corridor keeps its plain catalog fee/FX terms).
+ * The full MBP lookup for one corridor on one quote. Returns `null` when
+ * nothing matches (the corridor keeps its plain catalog fee/FX terms).
  *
  * `quote.partnerCountry` must already be preloaded by the caller (its own
- * `regionId` is a plain column, no nested preload needed) — this function
- * does no preloading itself, to keep it a plain, easily-testable function
- * of its inputs.
+ * `regionId` is a plain column, no nested preload needed).
  */
-export async function computeMbpForCorridor(
+export function computeMbpForCorridor(
   corridor: Corridor,
-  quote: Quote
-): Promise<MbpAdjustmentResult | null> {
-  const regionId = quote.partnerCountry?.regionId ?? null
-  const data = await fetchMbpReferenceData({
-    countryId: corridor.countryId,
-    regionId,
-    icpLevel1Id: quote.icpLevel1Id,
-    icpLevel3Id: quote.icpLevel3Id,
-  })
-
+  quote: Quote,
+  data: MbpReferenceData
+): MbpAdjustmentResult | null {
+  const { regionId, icpLevel1Id, icpLevel2Id, icpLevel3Id } = quoteMbpContext(quote)
   return computeMbpAdjustment(
     {
       regionId,
-      icpLevel1Id: quote.icpLevel1Id,
-      icpLevel2Id: quote.icpLevel2Id,
-      icpLevel3Id: quote.icpLevel3Id,
+      icpLevel1Id,
+      icpLevel2Id,
+      icpLevel3Id,
       countryId: corridor.countryId,
       transactionTypeCode: corridor.transactionTypeCode,
       currencyId: corridor.payoutCurrencyId,
     },
     data
   )
+}
+
+/** Same lookup, for every corridor in a list at once, reusing one already-fetched `MbpReferenceData` — see `fetchAllMbpReferenceData`. */
+export function computeMbpForCorridors(
+  corridors: Corridor[],
+  quote: Quote,
+  data: MbpReferenceData
+): Map<number, MbpAdjustmentResult | null> {
+  const result = new Map<number, MbpAdjustmentResult | null>()
+  for (const corridor of corridors) {
+    result.set(corridor.id, computeMbpForCorridor(corridor, quote, data))
+  }
+  return result
 }

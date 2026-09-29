@@ -279,3 +279,29 @@ export function computeMbpAdjustment(
     reason: decision.pricingDecision,
   }
 }
+
+/** The fee a corridor would show with no manual edit: the MBP fee if a rule matched, else the plain catalog fee. */
+export function resolveMbpFee(mbp: MbpAdjustmentResult | null, catalogFeeUsd: number | null): number {
+  const catalogFee = catalogFeeUsd ?? 0
+  if (!mbp) return catalogFee
+  if (mbp.fixedFeeUsdOverride !== null) return mbp.fixedFeeUsdOverride
+  if (mbp.fixedFeeAdjustmentPct !== null) return catalogFee * (1 + mbp.fixedFeeAdjustmentPct / 100)
+  return catalogFee
+}
+
+/**
+ * Does a submitted fee count as a deliberate manual override, or does it
+ * still match what MBP (or the catalog, if no rule matches) currently
+ * says? Used identically at create and update time, so sending back
+ * exactly the current MBP/catalog number — by hand or via a "Use MBP fee"
+ * button — is recognized as "still following MBP," not a manual edit, and
+ * a row can resume auto-following just by being re-synced to the current
+ * number.
+ */
+export function isFixedFeeManuallySet(
+  submittedFeeUsd: number,
+  mbp: MbpAdjustmentResult | null,
+  catalogFeeUsd: number | null
+): boolean {
+  return submittedFeeUsd !== resolveMbpFee(mbp, catalogFeeUsd)
+}

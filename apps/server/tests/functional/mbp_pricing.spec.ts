@@ -115,9 +115,10 @@ test.group('Market-Based Pricing', () => {
       .header('Authorization', `Bearer ${token}`)
       .json({
         corridorId: corridor.id,
-        // Matches the catalog fee exactly — an MBP-unaware caller's natural
-        // default, so the server is free to apply its own MBP default.
-        fixedFeeUsd: 1.3,
+        // Matches what MBP currently says exactly — an MBP-aware caller's
+        // natural default (see `seedQuoteCorridorFromCatalog`), so the
+        // server recognizes this as "not manually overridden."
+        fixedFeeUsd: 5,
         yearlyVolumeUsd: 0,
         yearlyTransactions: 0,
         variableFeePct: 0,
@@ -169,7 +170,7 @@ test.group('Market-Based Pricing', () => {
       .header('Authorization', `Bearer ${token}`)
       .json({
         corridorId: corridor.id,
-        fixedFeeUsd: 1.3,
+        fixedFeeUsd: 5, // matches the live MBP answer — not manual yet
         yearlyVolumeUsd: 0,
         yearlyTransactions: 0,
         variableFeePct: 0,
@@ -196,5 +197,90 @@ test.group('Market-Based Pricing', () => {
     unrelatedSave.assertStatus(200)
     assert.equal(unrelatedSave.body().fixedFeeUsd, 9.99)
     assert.isTrue(unrelatedSave.body().fixedFeeManuallySet)
+
+    // "Use MBP fee": re-syncing the row to exactly the current MBP answer
+    // is recognized as following MBP again, not a fresh manual override —
+    // this is what lets a "Use MBP fee" button work correctly.
+    const resynced = await client
+      .patch(`/quotes/${quote.id}/corridors/${created.body().id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ fixedFeeUsd: 5 })
+    resynced.assertStatus(200)
+    assert.equal(resynced.body().fixedFeeUsd, 5)
+    assert.isFalse(resynced.body().fixedFeeManuallySet)
+  })
+
+  test('GET /quotes/:id includes a live MBP result per saved corridor, recomputed fresh on every fetch', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const { partnerCountry, corridor, icpL1 } = await createMbpFixture('4')
+    const quote = await Quote.create({
+      name: 'Live MBP Quote',
+      ownerId: user.id,
+      status: 'draft',
+      partnerCountryId: partnerCountry.id,
+      icpLevel1Id: icpL1.id,
+    })
+    const created = await client
+      .post(`/quotes/${quote.id}/corridors`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        corridorId: corridor.id,
+        fixedFeeUsd: 5,
+        yearlyVolumeUsd: 0,
+        yearlyTransactions: 0,
+        variableFeePct: 0,
+        appliedFxSpread: 0,
+      })
+    created.assertStatus(201)
+
+    const shown = await client.get(`/quotes/${quote.id}`).header('Authorization', `Bearer ${token}`)
+    shown.assertStatus(200)
+    const shownCorridor = shown.body().quote.corridors.find((c: { id: number }) => c.id === created.body().id)
+    assert.isDefined(shownCorridor)
+    assert.isNotNull(shownCorridor.mbp)
+    assert.equal(shownCorridor.mbp.source, 'grid')
+    assert.equal(shownCorridor.mbp.fixedFeeUsdOverride, 5)
+  })
+
+  test('matching-corridors preview includes MBP when a quoteId is given, and enforces quote access', async ({
+    client,
+    assert,
+  }) => {
+    const { token, user } = await createUserWithToken()
+    const { token: otherToken } = await createUserWithToken()
+    const { region, partnerCountry, corridor, icpL1 } = await createMbpFixture('5')
+    const quote = await Quote.create({
+      name: 'Preview MBP Quote',
+      ownerId: user.id,
+      status: 'draft',
+      partnerCountryId: partnerCountry.id,
+      icpLevel1Id: icpL1.id,
+    })
+
+    const withQuote = await client
+      .get(`/reference/corridors/matching?regionIds=${region.id}&quoteId=${quote.id}`)
+      .header('Authorization', `Bearer ${token}`)
+    withQuote.assertStatus(200)
+    const previewCorridor = withQuote.body().corridors.find((c: { id: number }) => c.id === corridor.id)
+    assert.isDefined(previewCorridor)
+    assert.isNotNull(previewCorridor.mbp)
+    assert.equal(previewCorridor.mbp.source, 'grid')
+    assert.equal(previewCorridor.mbp.fixedFeeUsdOverride, 5)
+
+    // Without a quoteId, the preview is plain catalog data — no MBP.
+    const withoutQuote = await client
+      .get(`/reference/corridors/matching?regionIds=${region.id}`)
+      .header('Authorization', `Bearer ${token}`)
+    withoutQuote.assertStatus(200)
+    assert.isNull(withoutQuote.body().corridors.find((c: { id: number }) => c.id === corridor.id).mbp)
+
+    // A user who doesn't own the quote (and isn't admin) can't preview MBP against it.
+    const forbidden = await client
+      .get(`/reference/corridors/matching?regionIds=${region.id}&quoteId=${quote.id}`)
+      .header('Authorization', `Bearer ${otherToken}`)
+    forbidden.assertStatus(403)
   })
 })

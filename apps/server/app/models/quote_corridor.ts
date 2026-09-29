@@ -156,4 +156,16 @@ export default class QuoteCorridor extends BaseModel {
   static priced = scope((query) => {
     query.whereNull('deleted_at').where('yearly_volume_usd', '>', 0).whereNotNull('total_revenue')
   })
+
+  /**
+   * Lucid's default `serialize()` silently drops `$extras` unless a model
+   * opts in — this flattens the one extra field the MBP controllers attach
+   * (`quoteCorridor.$extras.mbp`, the live Market-Based Pricing result) so
+   * it actually reaches the JSON response, both for a single row (create/
+   * update) and for each row nested under `Quote.serialize()`'s
+   * `corridors` relation (`GET /quotes/:id`).
+   */
+  serializeExtras() {
+    return { mbp: this.$extras.mbp ?? null }
+  }
 }

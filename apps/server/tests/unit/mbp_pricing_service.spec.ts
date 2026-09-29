@@ -1,7 +1,9 @@
 import { test } from '@japa/runner'
 import {
   computeMbpAdjustment,
+  isFixedFeeManuallySet,
   matchesTransactionType,
+  resolveMbpFee,
   type MbpMatchContext,
   type MbpReferenceData,
 } from '#services/mbp_pricing_service'
@@ -289,5 +291,31 @@ test.group('computeMbpAdjustment', () => {
     assert.isTrue(matchesTransactionType('C2X/B2C', 'C2B'))
     assert.isTrue(matchesTransactionType('C2X/B2C', 'B2C'))
     assert.isFalse(matchesTransactionType('C2X/B2C', 'B2B'))
+  })
+})
+
+test.group('resolveMbpFee / isFixedFeeManuallySet', () => {
+  const gridResult = computeMbpAdjustment(baseContext(), DENMARK_DATA)! // $5.00, source: grid
+
+  test('resolveMbpFee returns the MBP fee when a rule matched', ({ assert }) => {
+    assert.equal(resolveMbpFee(gridResult, 1.3), 5)
+  })
+
+  test('resolveMbpFee falls back to the catalog fee when nothing matched', ({ assert }) => {
+    assert.equal(resolveMbpFee(null, 1.3), 1.3)
+    assert.equal(resolveMbpFee(null, null), 0)
+  })
+
+  test('a fee matching the current MBP answer is not manual', ({ assert }) => {
+    assert.isFalse(isFixedFeeManuallySet(5, gridResult, 1.3))
+  })
+
+  test('a fee matching the catalog when no MBP rule matched is not manual', ({ assert }) => {
+    assert.isFalse(isFixedFeeManuallySet(1.3, null, 1.3))
+  })
+
+  test('a fee that differs from the current MBP/catalog answer is manual', ({ assert }) => {
+    assert.isTrue(isFixedFeeManuallySet(9.99, gridResult, 1.3))
+    assert.isTrue(isFixedFeeManuallySet(1.3, gridResult, 1.3)) // the old catalog value, once MBP applies, now counts as manual
   })
 })

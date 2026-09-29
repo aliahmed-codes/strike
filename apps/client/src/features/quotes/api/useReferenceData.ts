@@ -22,8 +22,8 @@ export const referenceKeys = {
     ['reference', 'corridors', filters ?? {}] as const,
   corridorFacets: (filters: string) =>
     ['reference', 'corridors', 'facets', filters] as const,
-  matchingCorridors: (filters: string) =>
-    ['reference', 'corridors', 'matching', filters] as const,
+  matchingCorridors: (filters: string, quoteId: number | null) =>
+    ['reference', 'corridors', 'matching', filters, quoteId] as const,
 }
 
 export function useRegions() {
@@ -123,14 +123,25 @@ export function useCorridorFacets(filters: CorridorFacetFilters = {}) {
   })
 }
 
-/** Powers "Bulk Add by Filter" — the actual matching corridors (capped server-side), not just facet counts. */
-export function useMatchingCorridors(filters: CorridorFacetFilters, enabled: boolean) {
+/**
+ * Powers "Bulk Add by Filter" — the actual matching corridors (capped
+ * server-side), not just facet counts. `quoteId`, when given, also
+ * previews each corridor's Market-Based Pricing result against that
+ * quote's Sending Partner Region/ICP category (see `corridor.mbp`) before
+ * it's ever added — omit it (or pass `null`) for a plain catalog preview.
+ */
+export function useMatchingCorridors(
+  filters: CorridorFacetFilters,
+  enabled: boolean,
+  quoteId: number | null = null
+) {
   const params = serializeFacetFilters(filters)
+  const url = quoteId
+    ? `/reference/corridors/matching?${params}&quoteId=${quoteId}`
+    : `/reference/corridors/matching?${params}`
   return useQuery({
-    queryKey: referenceKeys.matchingCorridors(params),
-    queryFn: async ({ signal }) =>
-      (await apiClient.get<{ corridors: Corridor[] }>(`/reference/corridors/matching?${params}`, { signal }))
-        .data.corridors,
+    queryKey: referenceKeys.matchingCorridors(params, quoteId),
+    queryFn: async ({ signal }) => (await apiClient.get<{ corridors: Corridor[] }>(url, { signal })).data.corridors,
     enabled,
     placeholderData: (previousData) => previousData,
   })

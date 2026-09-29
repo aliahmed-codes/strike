@@ -67,4 +67,14 @@ export default class Corridor extends BaseModel {
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
+
+  /**
+   * Lucid's default `serialize()` silently drops `$extras` unless a model
+   * opts in — this flattens the one extra field `matchingCorridors`
+   * attaches when previewing Market-Based Pricing before a corridor is
+   * added to a quote (`corridor.$extras.mbp`).
+   */
+  serializeExtras() {
+    return { mbp: this.$extras.mbp ?? null }
+  }
 }

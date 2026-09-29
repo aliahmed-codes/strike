@@ -21,6 +21,7 @@ import {
   computeTreasuryFxCostPct,
   computeYearlyTransactions,
   feeCurrencyToUsd,
+  resolveMbpFee,
   seedQuoteCorridorFromCatalog,
   usdToFeeCurrencyAmount,
   validateCorridorField,
@@ -28,6 +29,7 @@ import {
   type Corridor,
   type CorridorLimitedField,
   type CorridorTierInput,
+  type MbpAdjustmentResult,
   type PricedCorridor,
   type PricingModel,
   type QuoteCorridor,
@@ -168,6 +170,12 @@ interface RowView {
   needsApproval: boolean
   needsFinancialApproval: boolean
   needsNetworkApproval: boolean
+  /** The live Market-Based Pricing result for a saved row (recomputed fresh on every quote fetch) or a preview row (from the quoteId-aware matching-corridors preview) — `null` if no rule currently matches. */
+  mbp: MbpAdjustmentResult | null
+  /** False for every preview row (nothing saved yet to have been manually touched). For a saved row, mirrors `savedRow.fixedFeeManuallySet`. */
+  fixedFeeManuallySet: boolean
+  /** What MBP (or the catalog, if no rule matches) currently says the fee should be — compared against `current.fixedFeeUsd` to show the "out of date" hint. */
+  liveMbpFee: number | null
 }
 
 type SortField = 'corridor' | 'fundingCurrency' | 'volume' | 'revenue' | 'marginPct' | 'takeRate' | 'approval'
@@ -425,9 +433,9 @@ function previewTieredPricing(
   })
 }
 
-/** A preview row's starting numbers — same seed used to build its promote-on-edit payload, so it never shows different numbers than the row it becomes. */
+/** A preview row's starting numbers — same seed used to build its promote-on-edit payload, so it never shows different numbers than the row it becomes. Reads `corridor.mbp` (only present when the matching-corridors query was made with a `quoteId`) so a corridor's previewed fee already reflects Market-Based Pricing before it's ever added. */
 function previewFieldsFor(corridor: Corridor): EditableFields {
-  const seed = seedQuoteCorridorFromCatalog(corridor)
+  const seed = seedQuoteCorridorFromCatalog(corridor, corridor.mbp ?? null)
   return {
     atvUsd: seed.atvUsd ?? 0,
     yearlyVolumeUsd: seed.yearlyVolumeUsd,
@@ -493,6 +501,53 @@ function ApprovalCell({
     <div className="flex justify-end gap-1">
       <ApprovalBadge label="Financial" needed={needsFinancial} reasons={financialReasons} />
       <ApprovalBadge label="Network" needed={needsNetwork} reasons={networkReasons} />
+    </div>
+  )
+}
+
+const MBP_SOURCE_LABEL: Record<MbpAdjustmentResult['source'], string> = {
+  strategic_override: 'Exception',
+  grid: 'Market rule',
+  decision_matrix: 'Market adjustment',
+}
+
+/** A small pill explaining why Market-Based Pricing changed this corridor's fee — click to see which rule fired and why. */
+function MbpBadge({ mbp }: { mbp: MbpAdjustmentResult }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-800 hover:bg-blue-200 dark:bg-blue-950 dark:text-blue-200"
+        >
+          MBP: {MBP_SOURCE_LABEL[mbp.source]}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72">
+        <PopoverTitle>Market-Based Pricing applied</PopoverTitle>
+        <p className="text-xs text-muted-foreground">
+          {mbp.reason ?? 'This corridor matched a Market-Based Pricing rule for the current Sending Partner Region and ICP category.'}
+        </p>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** Shown when the row's fee no longer matches what MBP currently recommends — either it's genuinely stale (auto-following, hasn't been re-saved since a rule change) or it was manually set to something else on purpose. */
+function MbpStaleHint({
+  row,
+  onApply,
+}: {
+  row: RowView
+  onApply: () => void
+}) {
+  if (row.liveMbpFee === null || row.liveMbpFee === row.current.fixedFeeUsd) return null
+  return (
+    <div className="mt-1 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+      <span>MBP now suggests {money(row.liveMbpFee)}</span>
+      <button type="button" className="font-medium underline hover:no-underline" onClick={onApply}>
+        Update
+      </button>
     </div>
   )
 }
@@ -685,7 +740,11 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   )
   const filterParams = { ...appliedFilters, restrictToUseCaseAllowedCountries }
   const { data: facets } = useCorridorFacets(filterParams)
-  const { data: matches, isPending: matchesLoading, isError: matchesError } = useMatchingCorridors(filterParams, true)
+  const { data: matches, isPending: matchesLoading, isError: matchesError } = useMatchingCorridors(
+    filterParams,
+    true,
+    quoteId
+  )
   // Funding currencies are a buffered field like everything else on Summary
   // (see useQuoteFormField) — must read the pending value here too, not just
   // the saved quote's, or this stays out of sync until the next Save Draft.
@@ -799,6 +858,14 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
       ? savedRow.fundingCurrency
       : (currencies ?? []).find((c) => c.id === fundingCurrencyId)
 
+    // Saved rows carry the live MBP result directly (`GET /quotes/:id`
+    // recomputes it fresh on every fetch); preview rows carry it on the
+    // underlying catalog corridor, only when the matching-corridors query
+    // included this quote's id (see `useMatchingCorridors`).
+    const mbp = savedRow ? savedRow.mbp : (item.kind === 'preview' ? (item.corridor.mbp ?? null) : null)
+    const fixedFeeManuallySet = savedRow?.fixedFeeManuallySet ?? false
+    const liveMbpFee = corridor ? resolveMbpFee(mbp, corridor.stdFixedFeeUsd) : null
+
     return {
       item,
       corridor,
@@ -827,6 +894,9 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
       needsNetworkApproval: previewSummary
         ? previewSummary.needsNetworkApproval
         : (savedRow?.needsNetworkApproval ?? false),
+      mbp,
+      fixedFeeManuallySet,
+      liveMbpFee,
     }
   }
 
@@ -970,7 +1040,7 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   ): Promise<void> {
     if (promotingKeys.has(key)) return
     const sentEdits = useCorridorEditsStore.getState().edits[tabKey]?.[key]
-    const seed = seedQuoteCorridorFromCatalog(corridor)
+    const seed = seedQuoteCorridorFromCatalog(corridor, corridor.mbp ?? null)
     const payload: QuoteCorridorInput = {
       corridorId: corridor.id,
       ...seed,
@@ -1006,6 +1076,24 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
     await updateCorridor.mutateAsync({ corridorRowId: rowId, input: edits })
     const latest = useCorridorEditsStore.getState().edits[tabKey]?.[key]
     if (latest === edits) clearRowEdit(tabKey, key)
+  }
+
+  /**
+   * "Update" on the MBP stale hint — re-syncs the row's fee to what MBP
+   * currently says. For a saved row, this is an immediate PATCH (not
+   * staged): sending back exactly the live MBP number is recognized
+   * server-side as "still following MBP," not a manual override, so the
+   * row resumes auto-following from here on (see
+   * `mbp_pricing_service.ts`'s `isFixedFeeManuallySet`). For a preview
+   * row, nothing's saved yet — just stage the value like any other edit.
+   */
+  function applyMbpFee(row: RowView) {
+    if (row.liveMbpFee === null) return
+    if (row.savedRow) {
+      updateCorridor.mutate({ corridorRowId: row.savedRow.id, input: { fixedFeeUsd: row.liveMbpFee } })
+    } else {
+      handleFieldChange(row.item.key, 'fixedFeeUsd', row.liveMbpFee)
+    }
   }
 
   function labelForRowKey(key: string): string {
@@ -2137,6 +2225,8 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                           {rowFieldErrors[item.key]?.fixedFeeUsd && (
                             <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].fixedFeeUsd}</p>
                           )}
+                          {row.mbp && <MbpBadge mbp={row.mbp} />}
+                          <MbpStaleHint row={row} onApply={() => applyMbpFee(row)} />
                         </td>
                         <td className="py-2 pr-3 text-right">
                           <Input
