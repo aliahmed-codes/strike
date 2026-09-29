@@ -41,6 +41,17 @@ export default class QuoteCorridor extends BaseModel {
   @column()
   declare fixedFeeUsd: number
 
+  /**
+   * False = `fixedFeeUsd` still follows the live Market-Based Pricing (MBP)
+   * recommendation and gets recomputed on every save. True = a human typed
+   * their own value into the Fixed Fee cell, so it no longer auto-follows
+   * MBP even if the quote's Sending Partner Region/ICP category changes
+   * later. Flips to true the moment a save actually changes `fixedFeeUsd`
+   * away from what MBP+catalog would currently produce.
+   */
+  @column()
+  declare fixedFeeManuallySet: boolean
+
   @column()
   declare variableFeePct: number
 

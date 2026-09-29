@@ -1,0 +1,62 @@
+[
+  {
+    "regionName": "Europe",
+    "transactionType": "C2X/B2C",
+    "pressureLevel": "High"
+  },
+  {
+    "regionName": "Europe",
+    "transactionType": "B2B",
+    "pressureLevel": "High"
+  },
+  {
+    "regionName": "Americas",
+    "transactionType": "C2X/B2C",
+    "pressureLevel": "High"
+  },
+  {
+    "regionName": "Americas",
+    "transactionType": "B2B",
+    "pressureLevel": "High"
+  },
+  {
+    "regionName": "APAC",
+    "transactionType": "C2X/B2C",
+    "pressureLevel": "High"
+  },
+  {
+    "regionName": "APAC",
+    "transactionType": "B2B",
+    "pressureLevel": "High"
+  },
+  {
+    "regionName": "Africa",
+    "transactionType": "C2X/B2C",
+    "pressureLevel": "Low"
+  },
+  {
+    "regionName": "Africa",
+    "transactionType": "B2B",
+    "pressureLevel": "Low"
+  },
+  {
+    "regionName": "Greater China",
+    "transactionType": "C2X/B2C",
+    "pressureLevel": "Medium"
+  },
+  {
+    "regionName": "Greater China",
+    "transactionType": "B2B",
+    "pressureLevel": "Medium"
+  },
+  {
+    "regionName": "MENA",
+    "transactionType": "C2X/B2C",
+    "pressureLevel": "High"
+  },
+  {
+    "regionName": "MENA",
+    "transactionType": "B2B",
+    "pressureLevel": "High"
+  }
+]

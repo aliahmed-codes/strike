@@ -14,6 +14,7 @@ import {
   type CorridorMasterData,
   type CorridorTierInput,
 } from '#services/quote_pricing_service'
+import { computeMbpForCorridor } from '#services/mbp_pricing_service'
 import {
   bulkCorridorIdsValidator,
   createQuoteCorridorValidator,
@@ -33,7 +34,10 @@ function masterDataFor(corridor: Corridor): CorridorMasterData {
 }
 
 async function loadEditableQuote(quoteId: number, user: User) {
-  const quote = await Quote.find(quoteId)
+  // `.preload('partnerCountry')` is needed for the MBP lookup's Sending
+  // Partner Region (Country.regionId is a plain column — no nested preload
+  // of `region` itself required).
+  const quote = await Quote.query().where('id', quoteId).preload('partnerCountry').first()
   if (!quote) {
     return { error: { status: 404 as const, message: 'Quote not found' } }
   }
@@ -59,7 +63,7 @@ async function priceAndSave(
   corridor: Corridor,
   quote: Quote,
   tiers: CorridorTierInput[] | undefined
-): Promise<{ error: string } | { ok: true }> {
+): Promise<{ error: string } | { ok: true; mbp: Awaited<ReturnType<typeof computeMbpForCorridor>> }> {
   // Never trusted from client input — always derived from the row's own
   // volume/ATV, matching the old app's real non-editable "Yearly
   // transactions" column.
@@ -69,13 +73,27 @@ async function priceAndSave(
   )
   quoteCorridor.yearlyTransactions = yearlyTransactions
 
+  // Market-Based Pricing: while the fee hasn't been manually typed over,
+  // it always follows the current MBP recommendation (or the plain catalog
+  // fee, if no MBP rule matches) — recomputed on every save, so it stays
+  // live if the quote's Sending Partner Region/ICP category changes later.
+  // The moment a human explicitly sets it (see `update` below),
+  // `fixedFeeManuallySet` flips true and it stops auto-following.
+  const mbp = await computeMbpForCorridor(corridor, quote)
+  if (!quoteCorridor.fixedFeeManuallySet) {
+    const catalogFee = corridor.stdFixedFeeUsd ?? 0
+    quoteCorridor.fixedFeeUsd =
+      mbp?.fixedFeeUsdOverride ??
+      (mbp?.fixedFeeAdjustmentPct != null ? catalogFee * (1 + mbp.fixedFeeAdjustmentPct / 100) : catalogFee)
+  }
+
   const commonInputs = {
     transactionTypeCode: corridor.transactionTypeCode,
     fundingCurrencyId: quoteCorridor.fundingCurrencyId,
     payoutCurrencyId: corridor.payoutCurrencyId,
     opportunityType: quote.opportunityType,
     corridor: masterDataFor(corridor),
-    fxSourceOverride: quoteCorridor.fxSourceOverride,
+    fxSourceOverride: quoteCorridor.fxSourceOverride ?? mbp?.fxSourceOverride ?? null,
     treasuryFxCostSpreadOverride: quoteCorridor.treasuryFxCostSpreadOverride,
     costFixedUsdOverride: quoteCorridor.costFixedUsdOverride,
     costVariablePctOverride: quoteCorridor.costVariablePctOverride,
@@ -94,7 +112,7 @@ async function priceAndSave(
     quoteCorridor.merge({ ...pricing, computedAt: DateTime.now() })
     await quoteCorridor.save()
     await QuoteCorridorTier.query().where('quoteCorridorId', quoteCorridor.id).delete()
-    return { ok: true }
+    return { ok: true, mbp }
   }
 
   // Tiered: use the given tier set, or whatever's already persisted.
@@ -179,7 +197,7 @@ async function priceAndSave(
     })
   }
 
-  return { ok: true }
+  return { ok: true, mbp }
 }
 
 export default class QuoteCorridorsController {
@@ -211,6 +229,16 @@ export default class QuoteCorridorsController {
 
     const corridor = await Corridor.findOrFail(payload.corridorId)
 
+    // A creation payload whose fixedFeeUsd already equals the plain catalog
+    // fee is exactly what an MBP-unaware caller would send by default (see
+    // `seedQuoteCorridorFromCatalog`) — treat that as "not manually set yet"
+    // so Market-Based Pricing can supply its own default underneath it. A
+    // payload that deliberately sends something else is a real manual
+    // value (a human typed it, or a test fixture exercising specific
+    // numbers) and must never be silently replaced.
+    const catalogFee = corridor.stdFixedFeeUsd ?? 0
+    const fixedFeeManuallySet = payload.fixedFeeUsd !== catalogFee
+
     const quoteCorridor = new QuoteCorridor()
     quoteCorridor.merge({
       quoteId: quote!.id,
@@ -220,6 +248,7 @@ export default class QuoteCorridorsController {
       yearlyVolumeUsd: payload.yearlyVolumeUsd,
       yearlyTransactions: payload.yearlyTransactions,
       fixedFeeUsd: payload.fixedFeeUsd,
+      fixedFeeManuallySet,
       variableFeePct: payload.variableFeePct,
       appliedFxSpread: payload.appliedFxSpread,
       feeDiscountPct: payload.feeDiscountPct ?? 0,
@@ -238,6 +267,7 @@ export default class QuoteCorridorsController {
     }
 
     await quoteCorridor.load('tiers')
+    quoteCorridor.$extras.mbp = result.mbp
     return response.created(quoteCorridor)
   }
 
@@ -257,6 +287,13 @@ export default class QuoteCorridorsController {
 
     const payload = await request.validateUsing(updateQuoteCorridorValidator)
     const { tiers, ...corridorFields } = payload
+    // A save that explicitly sets the Fixed Fee is a human overriding it —
+    // it stops auto-following Market-Based Pricing from this point on. A
+    // save that doesn't touch this field (e.g. changing the discount % only)
+    // leaves the flag as-is, so an already-manual fee stays manual.
+    if (payload.fixedFeeUsd !== undefined) {
+      quoteCorridor.fixedFeeManuallySet = true
+    }
     quoteCorridor.merge(corridorFields)
 
     const corridor = await Corridor.findOrFail(quoteCorridor.corridorId)
@@ -267,6 +304,7 @@ export default class QuoteCorridorsController {
     }
 
     await quoteCorridor.load('tiers')
+    quoteCorridor.$extras.mbp = result.mbp
     return response.ok(quoteCorridor)
   }
 

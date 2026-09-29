@@ -1,0 +1,834 @@
+[
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Bank",
+    "icpLevel3Name": "Tier 1 international bank",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Bank",
+    "icpLevel3Name": "Tier 1 international bank",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Bank",
+    "icpLevel3Name": "Regional bank / Credit union",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Bank",
+    "icpLevel3Name": "Regional bank / Credit union",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Bank",
+    "icpLevel3Name": "Neobank / Digital bank",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Bank",
+    "icpLevel3Name": "Neobank / Digital bank",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "MTO",
+    "icpLevel3Name": "Global MTO",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "MTO",
+    "icpLevel3Name": "Global MTO",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "MTO",
+    "icpLevel3Name": "Regional MTO",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "MTO",
+    "icpLevel3Name": "Regional MTO",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Digital wallet",
+    "icpLevel3Name": "E-wallet",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Digital wallet",
+    "icpLevel3Name": "E-wallet",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Digital wallet",
+    "icpLevel3Name": "Telco-led mobile wallet",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Digital wallet",
+    "icpLevel3Name": "Telco-led mobile wallet",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Payouts, Disbursements & Accounts PSP",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Payouts, Disbursements & Accounts PSP",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Universal PSP",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Universal PSP",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Card issuer PSP",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Card issuer PSP",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Invoice factoring PSP",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Invoice factoring PSP",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Cross-border specialist PSP",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Cross-border specialist PSP",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "BaaS",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "BaaS",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Prepaid voucher / Stored-value provider",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Prepaid voucher / Stored-value provider",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Open banking PSP",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "Open banking PSP",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "BNPL PSP",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "PSP",
+    "icpLevel3Name": "BNPL PSP",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Other NBFI",
+    "icpLevel3Name": "Insurance provider",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Other NBFI",
+    "icpLevel3Name": "Insurance provider",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Other NBFI",
+    "icpLevel3Name": "Investment fund",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Other NBFI",
+    "icpLevel3Name": "Investment fund",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Other NBFI",
+    "icpLevel3Name": "Pension provider",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Other NBFI",
+    "icpLevel3Name": "Pension provider",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Other NBFI",
+    "icpLevel3Name": "FX brokers",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Other NBFI",
+    "icpLevel3Name": "FX brokers",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Other NBFI",
+    "icpLevel3Name": "Card networks / schemes",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Financial Institution",
+    "icpLevel2Name": "Other NBFI",
+    "icpLevel3Name": "Card networks / schemes",
+    "transactionType": "B2B",
+    "sensitivity": "High",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Marketplace",
+    "icpLevel3Name": "E-commerce marketplace",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Marketplace",
+    "icpLevel3Name": "E-commerce marketplace",
+    "transactionType": "B2B",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Marketplace",
+    "icpLevel3Name": "Gig economy platform",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Marketplace",
+    "icpLevel3Name": "Gig economy platform",
+    "transactionType": "B2B",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Marketplace",
+    "icpLevel3Name": "Online brokerage",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Marketplace",
+    "icpLevel3Name": "Online brokerage",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Payroll",
+    "icpLevel3Name": "Payroll service provider",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Payroll",
+    "icpLevel3Name": "Payroll service provider",
+    "transactionType": "B2B",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Payroll",
+    "icpLevel3Name": "Employer of Record (EOR)",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Payroll",
+    "icpLevel3Name": "Employer of Record (EOR)",
+    "transactionType": "B2B",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Payroll",
+    "icpLevel3Name": "Contractor of Record (COR)",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Payroll",
+    "icpLevel3Name": "Contractor of Record (COR)",
+    "transactionType": "B2B",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Financial services technology",
+    "icpLevel3Name": "Core banking system",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Financial services technology",
+    "icpLevel3Name": "Core banking system",
+    "transactionType": "B2B",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Financial services technology",
+    "icpLevel3Name": "Payment orchestrator / Gateway",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Financial services technology",
+    "icpLevel3Name": "Payment orchestrator / Gateway",
+    "transactionType": "B2B",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Financial services technology",
+    "icpLevel3Name": "Financial messaging platform",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Financial services technology",
+    "icpLevel3Name": "Financial messaging platform",
+    "transactionType": "B2B",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Financial services technology",
+    "icpLevel3Name": "Payment & Treasury platform",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Financial services technology",
+    "icpLevel3Name": "Payment & Treasury platform",
+    "transactionType": "B2B",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Financial services technology",
+    "icpLevel3Name": "B2B financial services platform",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "Financial services technology",
+    "icpLevel3Name": "B2B financial services platform",
+    "transactionType": "B2B",
+    "sensitivity": "Medium",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Online Travel Agent (OTA)",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Online Travel Agent (OTA)",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Property Management System (PMS)",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Property Management System (PMS)",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Enterprise Resource Planning (ERP)",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Enterprise Resource Planning (ERP)",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Accounts Payable platform",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Accounts Payable platform",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Spend management",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Spend management",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Other ISV",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Platform",
+    "icpLevel2Name": "ISV / SaaS",
+    "icpLevel3Name": "Other ISV",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Retailer",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Retailer",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Shipping",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Shipping",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Hotel",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Hotel",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Airline",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Airline",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Media",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Media",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Mining",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Mining",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Business services",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Business services",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Other logistics",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Other logistics",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Other enterprise",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Other enterprise",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Hyperscaler",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Other enterprise",
+    "icpLevel3Name": "Hyperscaler",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Public sector, education and non-profit",
+    "icpLevel3Name": "Non-governmental organization (NGO)",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Public sector, education and non-profit",
+    "icpLevel3Name": "Non-governmental organization (NGO)",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Public sector, education and non-profit",
+    "icpLevel3Name": "Educational institution",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Public sector, education and non-profit",
+    "icpLevel3Name": "Educational institution",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Public sector, education and non-profit",
+    "icpLevel3Name": "Government entity",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Enterprise",
+    "icpLevel2Name": "Public sector, education and non-profit",
+    "icpLevel3Name": "Government entity",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Unclassified",
+    "icpLevel2Name": "Unclassified",
+    "icpLevel3Name": "Unclassified",
+    "transactionType": "C2X/B2C",
+    "sensitivity": "Low",
+    "description": null
+  },
+  {
+    "icpLevel1Name": "Unclassified",
+    "icpLevel2Name": "Unclassified",
+    "icpLevel3Name": "Unclassified",
+    "transactionType": "B2B",
+    "sensitivity": "Low",
+    "description": null
+  }
+]

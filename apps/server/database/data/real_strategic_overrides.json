@@ -1,0 +1,164 @@
+[
+  {
+    "countryCode": "IND",
+    "currencyCode": null,
+    "regionName": null,
+    "transactionType": "C2C",
+    "icpLevel1Name": null,
+    "icpLevel2Name": null,
+    "icpLevel3Name": null,
+    "feeAdjustmentPercent": null,
+    "fxSpreadAdjustmentBps": null,
+    "reason": "India is part of top 15 corridors",
+    "effectiveFrom": "2026-08-16T19:00:00.000Z",
+    "effectiveTo": null,
+    "isActive": true,
+    "priority": 8,
+    "overrideMode": "standard",
+    "targetingMode": "mbp",
+    "fixedFeeUsd": 0.8,
+    "fxSpread": 1,
+    "minimumFxSpread": 0.2,
+    "sensitivities": [
+      "High"
+    ],
+    "regionPressures": [
+      "High"
+    ]
+  },
+  {
+    "countryCode": "GHA",
+    "currencyCode": null,
+    "regionName": null,
+    "transactionType": "C2C",
+    "icpLevel1Name": null,
+    "icpLevel2Name": null,
+    "icpLevel3Name": null,
+    "feeAdjustmentPercent": null,
+    "fxSpreadAdjustmentBps": null,
+    "reason": "Ghana is part of top 15 corridors",
+    "effectiveFrom": "2026-08-16T19:00:00.000Z",
+    "effectiveTo": null,
+    "isActive": true,
+    "priority": 7,
+    "overrideMode": "standard",
+    "targetingMode": "mbp",
+    "fixedFeeUsd": 1,
+    "fxSpread": 1,
+    "minimumFxSpread": 0.2,
+    "sensitivities": [
+      "High"
+    ],
+    "regionPressures": [
+      "High"
+    ]
+  },
+  {
+    "countryCode": "EGY",
+    "currencyCode": null,
+    "regionName": null,
+    "transactionType": "C2C",
+    "icpLevel1Name": null,
+    "icpLevel2Name": null,
+    "icpLevel3Name": null,
+    "feeAdjustmentPercent": null,
+    "fxSpreadAdjustmentBps": null,
+    "reason": "Egypt is part of top corridors",
+    "effectiveFrom": "2026-08-16T19:00:00.000Z",
+    "effectiveTo": null,
+    "isActive": true,
+    "priority": 6,
+    "overrideMode": "standard",
+    "targetingMode": "mbp",
+    "fixedFeeUsd": 0.9,
+    "fxSpread": 1,
+    "minimumFxSpread": 0.15,
+    "sensitivities": [
+      "High"
+    ],
+    "regionPressures": [
+      "High"
+    ]
+  },
+  {
+    "countryCode": "CMR",
+    "currencyCode": null,
+    "regionName": null,
+    "transactionType": "C2C",
+    "icpLevel1Name": null,
+    "icpLevel2Name": null,
+    "icpLevel3Name": null,
+    "feeAdjustmentPercent": null,
+    "fxSpreadAdjustmentBps": null,
+    "reason": "Cameroon is part of top 15 corridors",
+    "effectiveFrom": "2026-08-16T19:00:00.000Z",
+    "effectiveTo": null,
+    "isActive": true,
+    "priority": 3,
+    "overrideMode": "standard",
+    "targetingMode": "mbp",
+    "fixedFeeUsd": 1.25,
+    "fxSpread": 1.05,
+    "minimumFxSpread": 0.3,
+    "sensitivities": [
+      "High"
+    ],
+    "regionPressures": [
+      "High"
+    ]
+  },
+  {
+    "countryCode": "BRA",
+    "currencyCode": null,
+    "regionName": null,
+    "transactionType": "C2C",
+    "icpLevel1Name": null,
+    "icpLevel2Name": null,
+    "icpLevel3Name": null,
+    "feeAdjustmentPercent": null,
+    "fxSpreadAdjustmentBps": null,
+    "reason": "Brazil is part of top 15 corridors",
+    "effectiveFrom": "2026-08-16T19:00:00.000Z",
+    "effectiveTo": null,
+    "isActive": true,
+    "priority": 2,
+    "overrideMode": "standard",
+    "targetingMode": "mbp",
+    "fixedFeeUsd": 1,
+    "fxSpread": 1.6,
+    "minimumFxSpread": 0.85,
+    "sensitivities": [
+      "High"
+    ],
+    "regionPressures": [
+      "High"
+    ]
+  },
+  {
+    "countryCode": "BGD",
+    "currencyCode": null,
+    "regionName": null,
+    "transactionType": "C2C",
+    "icpLevel1Name": null,
+    "icpLevel2Name": null,
+    "icpLevel3Name": null,
+    "feeAdjustmentPercent": null,
+    "fxSpreadAdjustmentBps": null,
+    "reason": "Bangladesh is part of top 15 corridors",
+    "effectiveFrom": "2026-08-16T19:00:00.000Z",
+    "effectiveTo": null,
+    "isActive": true,
+    "priority": 1,
+    "overrideMode": "standard",
+    "targetingMode": "mbp",
+    "fixedFeeUsd": 0.9,
+    "fxSpread": 1,
+    "minimumFxSpread": 0.15,
+    "sensitivities": [
+      "High"
+    ],
+    "regionPressures": [
+      "High"
+    ]
+  }
+]

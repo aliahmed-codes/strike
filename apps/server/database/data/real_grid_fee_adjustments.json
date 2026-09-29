@@ -1,0 +1,326 @@
+[
+  {
+    "regionPressure": "High",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Financial Institution",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 2,
+    "fxSpreadAdjustmentBps": 15,
+    "minimumFxSpreadAdjustmentBps": 10
+  },
+  {
+    "regionPressure": "High",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Platform",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 5,
+    "fxSpreadAdjustmentBps": 20,
+    "minimumFxSpreadAdjustmentBps": 15
+  },
+  {
+    "regionPressure": "High",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Enterprise",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 7,
+    "fxSpreadAdjustmentBps": 25,
+    "minimumFxSpreadAdjustmentBps": 20
+  },
+  {
+    "regionPressure": "High",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Unclassified",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 0,
+    "fxSpreadAdjustmentBps": 0,
+    "minimumFxSpreadAdjustmentBps": 0
+  },
+  {
+    "regionPressure": "High",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Financial Institution",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 3,
+    "fxSpreadAdjustmentBps": 20,
+    "minimumFxSpreadAdjustmentBps": 15
+  },
+  {
+    "regionPressure": "High",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Platform",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 7,
+    "fxSpreadAdjustmentBps": 25,
+    "minimumFxSpreadAdjustmentBps": 20
+  },
+  {
+    "regionPressure": "High",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Enterprise",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 12,
+    "fxSpreadAdjustmentBps": 30,
+    "minimumFxSpreadAdjustmentBps": 25
+  },
+  {
+    "regionPressure": "High",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Unclassified",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 0,
+    "fxSpreadAdjustmentBps": 0,
+    "minimumFxSpreadAdjustmentBps": 0
+  },
+  {
+    "regionPressure": "High",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Financial Institution",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 5,
+    "fxSpreadAdjustmentBps": 25,
+    "minimumFxSpreadAdjustmentBps": 20
+  },
+  {
+    "regionPressure": "High",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Platform",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 10,
+    "fxSpreadAdjustmentBps": 30,
+    "minimumFxSpreadAdjustmentBps": 25
+  },
+  {
+    "regionPressure": "High",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Enterprise",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 15,
+    "fxSpreadAdjustmentBps": 35,
+    "minimumFxSpreadAdjustmentBps": 30
+  },
+  {
+    "regionPressure": "High",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Unclassified",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 0,
+    "fxSpreadAdjustmentBps": 0,
+    "minimumFxSpreadAdjustmentBps": 0
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Financial Institution",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 2,
+    "fxSpreadAdjustmentBps": 20,
+    "minimumFxSpreadAdjustmentBps": 15
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Platform",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 5,
+    "fxSpreadAdjustmentBps": 25,
+    "minimumFxSpreadAdjustmentBps": 20
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Enterprise",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 7,
+    "fxSpreadAdjustmentBps": 30,
+    "minimumFxSpreadAdjustmentBps": 25
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Unclassified",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 0,
+    "fxSpreadAdjustmentBps": 15,
+    "minimumFxSpreadAdjustmentBps": 10
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Financial Institution",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 3,
+    "fxSpreadAdjustmentBps": 25,
+    "minimumFxSpreadAdjustmentBps": 20
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Platform",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 7,
+    "fxSpreadAdjustmentBps": 30,
+    "minimumFxSpreadAdjustmentBps": 25
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Enterprise",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 12,
+    "fxSpreadAdjustmentBps": 35,
+    "minimumFxSpreadAdjustmentBps": 30
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Unclassified",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 0,
+    "fxSpreadAdjustmentBps": 25,
+    "minimumFxSpreadAdjustmentBps": 15
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Financial Institution",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 5,
+    "fxSpreadAdjustmentBps": 30,
+    "minimumFxSpreadAdjustmentBps": 25
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Platform",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 10,
+    "fxSpreadAdjustmentBps": 35,
+    "minimumFxSpreadAdjustmentBps": 30
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Enterprise",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 15,
+    "fxSpreadAdjustmentBps": 40,
+    "minimumFxSpreadAdjustmentBps": 35
+  },
+  {
+    "regionPressure": "Medium",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Unclassified",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 0,
+    "fxSpreadAdjustmentBps": 30,
+    "minimumFxSpreadAdjustmentBps": 20
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Financial Institution",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 2,
+    "fxSpreadAdjustmentBps": 25,
+    "minimumFxSpreadAdjustmentBps": 20
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Platform",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 5,
+    "fxSpreadAdjustmentBps": 30,
+    "minimumFxSpreadAdjustmentBps": 25
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Enterprise",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 7,
+    "fxSpreadAdjustmentBps": 35,
+    "minimumFxSpreadAdjustmentBps": 30
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "G10",
+    "icpLevel1Name": "Unclassified",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 0,
+    "fxSpreadAdjustmentBps": 0,
+    "minimumFxSpreadAdjustmentBps": 0
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Financial Institution",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 3,
+    "fxSpreadAdjustmentBps": 30,
+    "minimumFxSpreadAdjustmentBps": 25
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Platform",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 7,
+    "fxSpreadAdjustmentBps": 35,
+    "minimumFxSpreadAdjustmentBps": 30
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Enterprise",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 12,
+    "fxSpreadAdjustmentBps": 40,
+    "minimumFxSpreadAdjustmentBps": 35
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "G20",
+    "icpLevel1Name": "Unclassified",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 0,
+    "fxSpreadAdjustmentBps": 35,
+    "minimumFxSpreadAdjustmentBps": 25
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Financial Institution",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 5,
+    "fxSpreadAdjustmentBps": 35,
+    "minimumFxSpreadAdjustmentBps": 30
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Platform",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 10,
+    "fxSpreadAdjustmentBps": 40,
+    "minimumFxSpreadAdjustmentBps": 35
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Enterprise",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 15,
+    "fxSpreadAdjustmentBps": 45,
+    "minimumFxSpreadAdjustmentBps": 40
+  },
+  {
+    "regionPressure": "Low",
+    "corridorTier": "Exotic",
+    "icpLevel1Name": "Unclassified",
+    "transactionType": "B2B",
+    "fixedFeeUsd": 0,
+    "fxSpreadAdjustmentBps": 40,
+    "minimumFxSpreadAdjustmentBps": 30
+  }
+]

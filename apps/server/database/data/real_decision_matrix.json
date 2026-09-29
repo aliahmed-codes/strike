@@ -1,0 +1,65 @@
+[
+  {
+    "icpSensitivity": "High",
+    "regionPressure": "High",
+    "pricingDecision": "Strong Decrease",
+    "feeAdjustmentPercent": -30,
+    "fxSpreadAdjustmentBps": -5
+  },
+  {
+    "icpSensitivity": "Medium",
+    "regionPressure": "High",
+    "pricingDecision": "Decrease",
+    "feeAdjustmentPercent": -15,
+    "fxSpreadAdjustmentBps": 0
+  },
+  {
+    "icpSensitivity": "Low",
+    "regionPressure": "High",
+    "pricingDecision": "Maintain",
+    "feeAdjustmentPercent": 0,
+    "fxSpreadAdjustmentBps": 0
+  },
+  {
+    "icpSensitivity": "High",
+    "regionPressure": "Medium",
+    "pricingDecision": "Decrease",
+    "feeAdjustmentPercent": -15,
+    "fxSpreadAdjustmentBps": 0
+  },
+  {
+    "icpSensitivity": "Medium",
+    "regionPressure": "Medium",
+    "pricingDecision": "Maintain",
+    "feeAdjustmentPercent": 0,
+    "fxSpreadAdjustmentBps": 0
+  },
+  {
+    "icpSensitivity": "Low",
+    "regionPressure": "Medium",
+    "pricingDecision": "Increase",
+    "feeAdjustmentPercent": 15,
+    "fxSpreadAdjustmentBps": 5
+  },
+  {
+    "icpSensitivity": "High",
+    "regionPressure": "Low",
+    "pricingDecision": "Maintain",
+    "feeAdjustmentPercent": 0,
+    "fxSpreadAdjustmentBps": 0
+  },
+  {
+    "icpSensitivity": "Medium",
+    "regionPressure": "Low",
+    "pricingDecision": "Increase",
+    "feeAdjustmentPercent": 15,
+    "fxSpreadAdjustmentBps": 5
+  },
+  {
+    "icpSensitivity": "Low",
+    "regionPressure": "Low",
+    "pricingDecision": "Strong Increase",
+    "feeAdjustmentPercent": 30,
+    "fxSpreadAdjustmentBps": 10
+  }
+]

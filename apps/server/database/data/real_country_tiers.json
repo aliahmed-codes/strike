@@ -1,0 +1,1032 @@
+[
+  {
+    "countryCode": "USA",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "GBR",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "DEU",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "FRA",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "JPN",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "CHE",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "CAN",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "AUS",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "NZL",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "SWE",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "NOR",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "DNK",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "AUT",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "BEL",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "NLD",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "FIN",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "IRL",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "ITA",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "ESP",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "PRT",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "GRC",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "LUX",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "MCO",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "LIE",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "SMR",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "AND",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "SGP",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "HKG",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "ISR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "KOR",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "TWN",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "ISL",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "CZE",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "POL",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "HUN",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "SVK",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "SVN",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "EST",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "LVA",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "LTU",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "HRV",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "CYP",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "MLT",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "BGR",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "ROU",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "GIB",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "CHN",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "IND",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "BRA",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "RUS",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "ZAF",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "MEX",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "IDN",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "TUR",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "ARG",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "SAU",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "ARE",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "KWT",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "QAT",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "EGY",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "THA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MYS",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "PHL",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "VNM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "PAK",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "BGD",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "LKA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "NPL",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "KHM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MMR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MNG",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "JOR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "LBN",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "BHR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "OMN",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MAR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "TUN",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "DZA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "KAZ",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "UZB",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "AZE",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "ARM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GEO",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "CHL",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "COL",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "PER",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "BOL",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "ECU",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "PRY",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "URY",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GTM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "CRI",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "DOM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "SLV",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "JAM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "BHS",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GUY",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "SUR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "CUB",
+    "tier": "G20",
+    "notes": null
+  },
+  {
+    "countryCode": "HTI",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "UKR",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "BIH",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "MDA",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "MKD",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "MNE",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "SRB",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "NGA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GHA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "KEN",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "ETH",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "TZA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "UGA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "ZMB",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "ZWE",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "SEN",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "CMR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "CIV",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MOZ",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MWI",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MUS",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "NAM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "BWA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "RWA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "FJI",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "PNG",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "TON",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "BEN",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "BFA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "BDI",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "TCD",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "COG",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "COD",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GNQ",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GAB",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GMB",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GIN",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GNB",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "LBR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MDG",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MLI",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MRT",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "NER",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "SLE",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "SOM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "SSD",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "TGO",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "AGO",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "CPV",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "CAF",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "STP",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "SYC",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "LSO",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "VAT",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "BTN",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "BRN",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "KGZ",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "TJK",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "LAO",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "TLS",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "WSM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "KIR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MHL",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "FSM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "NRU",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "NIU",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "NFK",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MNP",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "PLW",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "SLB",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "TUV",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "VUT",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "KNA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "LCA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "DMA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GRD",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "VCT",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "ATG",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "AIA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "CYM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "TCA",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "VGB",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "VIR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MSR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "FLK",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GUF",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "GLP",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "MTQ",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "REU",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "MYT",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "NCL",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "PYF",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "WLF",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "GRL",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "FRO",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "GGY",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "JEY",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "IMN",
+    "tier": "G10",
+    "notes": null
+  },
+  {
+    "countryCode": "CXR",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "CCK",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "COK",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "SHN",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "MAC",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "COM",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "SWZ",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "HND",
+    "tier": "Exotic",
+    "notes": null
+  },
+  {
+    "countryCode": "NIC",
+    "tier": "Exotic",
+    "notes": null
+  }
+]
