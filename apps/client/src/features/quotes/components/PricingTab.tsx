@@ -664,6 +664,16 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   const { data, isLoading } = useQuote(quoteId)
   const { data: corridorCatalog } = useCorridorCatalog()
   const { data: currencies } = useCurrencies()
+  // Every distinct Fx Source across the WHOLE corridor catalog — for the
+  // per-row edit dropdown, which must offer every value a user could
+  // plausibly switch to, not just the ones already visible in this quote's
+  // (possibly tiny) set of matched/saved rows. Deliberately separate from
+  // `fxSourceOptions` below, which stays scoped to displayed rows because
+  // that one drives "Filter Corridors" (matching the old app's real
+  // behavior there — see its comment).
+  const catalogFxSourceOptions = Array.from(
+    new Set((corridorCatalog ?? []).map((c) => c.fxSource).filter((v): v is string => !!v))
+  ).sort()
 
   const addCorridor = useAddQuoteCorridor(quoteId)
   const updateCorridor = useUpdateQuoteCorridor(quoteId)
@@ -2275,7 +2285,7 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                                   value: FX_SOURCE_CATALOG_DEFAULT,
                                   label: `Catalog default${corridor?.fxSource ? ` (${corridor.fxSource})` : ''}`,
                                 },
-                                ...fxSourceOptions
+                                ...catalogFxSourceOptions
                                   .filter((s) => s !== corridor?.fxSource)
                                   .map((s) => ({ value: s, label: s })),
                               ]}
