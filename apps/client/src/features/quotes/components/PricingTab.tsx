@@ -19,6 +19,7 @@ import {
   computeQuoteTotals,
   computeTieredCorridorPricing,
   computeTreasuryFxCostPct,
+  computeYearlyTransactions,
   feeCurrencyToUsd,
   seedQuoteCorridorFromCatalog,
   usdToFeeCurrencyAmount,
@@ -57,6 +58,9 @@ import { useCorridorEditsStore, type CorridorRowEdit } from '../store/useCorrido
 
 const RESTRICTED_USE_CASE_LABELS = new Set(['last mile payout', 'account top-up'])
 
+/** Radix Select can't take an empty-string item value, so "use the catalog's own FX Source" needs a real sentinel instead of null/''. */
+const FX_SOURCE_CATALOG_DEFAULT = '__catalog_default__'
+
 // A stable reference for "no pending edits" — a fresh `{}` literal from the
 // Zustand selector below would look like a store change on every render to
 // `useSyncExternalStore`, causing an infinite re-render loop.
@@ -65,11 +69,25 @@ const NO_ROW_EDITS: Record<string, CorridorRowEdit> = {}
 interface EditableFields {
   atvUsd: number
   yearlyVolumeUsd: number
+  /** Never directly typed — always `computeYearlyTransactions(yearlyVolumeUsd, atvUsd)`, matching the old app's real non-editable "Yearly transactions" column. */
   yearlyTransactions: number
   fixedFeeUsd: number
   variableFeePct: number
   appliedFxSpread: number
   feeDiscountPct: number
+  /** Per-row overrides of the corridor catalog's own master data — null means "use the catalog value". The old app's real editable "Fx Source"/"T.E FX Cost Spread %"/"Fixed Cost in USD"/"Variable Cost %" cells. */
+  fxSourceOverride: string | null
+  treasuryFxCostSpreadOverride: number | null
+  costFixedUsdOverride: number | null
+  costVariablePctOverride: number | null
+}
+
+/** The subset of `EditableFields` that's a plain number the generic numeric-input handler can write — `fxSourceOverride` is a string and goes through its own dropdown handler instead. */
+type NumericEditableField = Exclude<keyof EditableFields, 'fxSourceOverride'>
+
+/** A row's effective treasury FX cost — its override if set, else the catalog value — the single place every FX-spread-preset/margin display reads from, so an edit is guaranteed to affect every dependent number consistently (see corridor_pricing_math.ts). */
+function effectiveTreasuryFxCostSpread(current: EditableFields, corridor: Corridor): number | null {
+  return current.treasuryFxCostSpreadOverride ?? corridor.treasuryFxCostSpread
 }
 
 /** The fields both a standard and a tiered pricing result share, so the table can display either uniformly. */
@@ -345,22 +363,6 @@ const money = (n: number | null) =>
   n === null ? '—' : `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-/**
- * A static conversion rate, not a live rate feed — only ~14 currencies have
- * one. Shows "No rate available" rather than a fabricated 1:1 fallback for
- * everything else.
- */
-function feeInFundingCurrency(
-  amountUsd: number,
-  currency: { isoCode3: string; feeConversionRateToUsd: number | null } | undefined
-): string {
-  if (!currency) return '—'
-  if (currency.isoCode3 === 'USD') return money(amountUsd)
-  if (currency.feeConversionRateToUsd === null) return 'No rate available'
-  const converted = amountUsd * currency.feeConversionRateToUsd
-  return `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency.isoCode3}`
-}
-
 /** Live-preview math — the exact same function the backend uses to compute and validate on save, so this can never drift from what actually gets persisted. */
 function previewPricing(
   fields: EditableFields,
@@ -416,6 +418,10 @@ function previewTieredPricing(
       internalRaw: corridor.internalRaw,
       centralBankRaw: corridor.centralBankRaw,
     },
+    fxSourceOverride: fields.fxSourceOverride,
+    treasuryFxCostSpreadOverride: fields.treasuryFxCostSpreadOverride,
+    costFixedUsdOverride: fields.costFixedUsdOverride,
+    costVariablePctOverride: fields.costVariablePctOverride,
   })
 }
 
@@ -430,6 +436,10 @@ function previewFieldsFor(corridor: Corridor): EditableFields {
     variableFeePct: seed.variableFeePct,
     appliedFxSpread: seed.appliedFxSpread,
     feeDiscountPct: seed.feeDiscountPct ?? 0,
+    fxSourceOverride: seed.fxSourceOverride ?? null,
+    treasuryFxCostSpreadOverride: seed.treasuryFxCostSpreadOverride ?? null,
+    costFixedUsdOverride: seed.costFixedUsdOverride ?? null,
+    costVariablePctOverride: seed.costVariablePctOverride ?? null,
   }
 }
 
@@ -508,6 +518,22 @@ function SortableHeader({
     >
       {label}
       {isActive && (sortState!.direction === 'asc' ? ' ▲' : ' ▼')}
+    </th>
+  )
+}
+
+/** One banner cell spanning a column group in the Pricing table's grouped header — an empty label renders a plain unlabeled spacer cell (matching the old app's own unlabeled Funding/Source Currency + cost-override group). */
+function GroupBanner({ label, colSpan }: { label: string; colSpan: number }) {
+  return (
+    <th
+      colSpan={colSpan}
+      className={
+        label
+          ? 'border-b bg-muted/60 px-2 py-1 text-left first:pl-0'
+          : 'border-b bg-transparent px-2 py-1'
+      }
+    >
+      {label}
     </th>
   )
 }
@@ -611,7 +637,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
   // row until "Save Tiers" is clicked, then cleared so the saved data takes over.
   const [tierDrafts, setTierDrafts] = useState<Record<string, CorridorTierInput[]>>({})
   const [expandedTierRows, setExpandedTierRows] = useState<Set<string>>(new Set())
-  const [expandedDetailRows, setExpandedDetailRows] = useState<Set<string>>(new Set())
   // Preview row keys currently being promoted (POSTed) — a guard so two
   // rapid Save clicks (or a re-render mid-save) for the same still-unsaved
   // row don't both create a real row (the backend's 409-on-duplicate would
@@ -736,17 +761,29 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
             variableFeePct: item.row.variableFeePct,
             appliedFxSpread: item.row.appliedFxSpread,
             feeDiscountPct: item.row.feeDiscountPct ?? 0,
+            fxSourceOverride: item.row.fxSourceOverride ?? null,
+            treasuryFxCostSpreadOverride: item.row.treasuryFxCostSpreadOverride ?? null,
+            costFixedUsdOverride: item.row.costFixedUsdOverride ?? null,
+            costVariablePctOverride: item.row.costVariablePctOverride ?? null,
           }
         : previewFieldsFor(item.corridor)
     const current: EditableFields = {
       atvUsd: fieldFor(item.key, saved, 'atvUsd'),
       yearlyVolumeUsd: fieldFor(item.key, saved, 'yearlyVolumeUsd'),
-      yearlyTransactions: fieldFor(item.key, saved, 'yearlyTransactions'),
+      // Never read from a pending edit or the saved row directly — always
+      // re-derived below, so it can never drift from volume/ATV even if a
+      // stale edit or saved value is sitting in the store.
+      yearlyTransactions: 0,
       fixedFeeUsd: fieldFor(item.key, saved, 'fixedFeeUsd'),
       variableFeePct: fieldFor(item.key, saved, 'variableFeePct'),
       appliedFxSpread: fieldFor(item.key, saved, 'appliedFxSpread'),
       feeDiscountPct: fieldFor(item.key, saved, 'feeDiscountPct'),
+      fxSourceOverride: fieldFor(item.key, saved, 'fxSourceOverride'),
+      treasuryFxCostSpreadOverride: fieldFor(item.key, saved, 'treasuryFxCostSpreadOverride'),
+      costFixedUsdOverride: fieldFor(item.key, saved, 'costFixedUsdOverride'),
+      costVariablePctOverride: fieldFor(item.key, saved, 'costVariablePctOverride'),
     }
+    current.yearlyTransactions = computeYearlyTransactions(current.yearlyVolumeUsd, current.atvUsd)
     const isTiered = savedRow?.pricingModel === 'tiered'
     const currentTiers = savedRow ? tiersFor(savedRow) : []
     const fundingCurrencyId =
@@ -793,13 +830,13 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
     }
   }
 
-  function fieldFor(key: string, saved: EditableFields, field: keyof EditableFields): number {
-    return rowEdits[key]?.[field] ?? saved[field]
+  function fieldFor<K extends keyof EditableFields>(key: string, saved: EditableFields, field: K): EditableFields[K] {
+    return (rowEdits[key]?.[field] as EditableFields[K] | undefined) ?? saved[field]
   }
 
-  function handleFieldChange(key: string, field: keyof EditableFields, value: number) {
+  function handleFieldChange(key: string, field: NumericEditableField, value: number | null) {
     setRowField(tabKey, key, field, value)
-    if (field in CORRIDOR_FIELD_LIMITS) {
+    if (value !== null && field in CORRIDOR_FIELD_LIMITS) {
       const message = validateCorridorField(field as CorridorLimitedField, value)
       setRowFieldErrors((prev) => {
         const nextRow = { ...prev[key] }
@@ -808,6 +845,11 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
         return { ...prev, [key]: nextRow }
       })
     }
+  }
+
+  /** `fxSourceOverride` is a string (or null for "use catalog default"), not a number — its own small setter rather than overloading `handleFieldChange`. */
+  function handleFxSourceOverrideChange(key: string, value: string | null) {
+    setRowField(tabKey, key, 'fxSourceOverride', value)
   }
 
   /**
@@ -845,16 +887,17 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
     if (!row.corridor) return null
     const fundingIso = row.fundingCurrencyObj?.isoCode3
     const payoutIso = row.corridor.payoutCurrency?.isoCode3 ?? ''
+    const treasuryCost = effectiveTreasuryFxCostSpread(row.current, row.corridor)
     if (fxSpreadMode === 'default') {
-      return computeFxDefaultSpreadPct(row.corridor.treasuryFxCostSpread, fundingIso, payoutIso)
+      return computeFxDefaultSpreadPct(treasuryCost, fundingIso, payoutIso)
     }
     if (fxSpreadMode === 'minimum') {
-      return computeFxMinimumSpreadPct(row.corridor.treasuryFxCostSpread, fundingIso, payoutIso)
+      return computeFxMinimumSpreadPct(treasuryCost, fundingIso, payoutIso)
     }
     // markup: treasury cost + a user-entered markup on top, per the old app's real preset.
     const markup = Number(fxMarkupValue)
     if (Number.isNaN(markup)) return null
-    return round2(computeTreasuryFxCostPct(row.corridor.treasuryFxCostSpread) + markup)
+    return round2(computeTreasuryFxCostPct(treasuryCost) + markup)
   }
 
   function applyBulkEdit() {
@@ -947,13 +990,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
       } else if (latest) {
         renameRowEditKey(tabKey, key, String(created.id))
       }
-      setExpandedDetailRows((prev) => {
-        if (!prev.has(key)) return prev
-        const next = new Set(prev)
-        next.delete(key)
-        next.add(String(created.id))
-        return next
-      })
     } finally {
       setPromotingKeys((prev) => {
         const next = new Set(prev)
@@ -1802,6 +1838,22 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
             )}
             <table className="w-full text-sm">
               <thead>
+                {/* Group banner row — mirrors the old app's real "Corridor Information" /
+                    "Transaction Fee Structure" / "FX Spread & Source" / "Volume & ATV" /
+                    "Corridor Financials" banners (PrignigTableHeader.tsx). The old app's
+                    Funding/Source Currency + T.E FX Cost Spread %/Fixed Cost/Variable Cost
+                    group is unlabeled there too — kept unlabeled here for the same reason. */}
+                <tr className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  <th />
+                  <th />
+                  <GroupBanner label="Corridor Information" colSpan={1} />
+                  <GroupBanner label="" colSpan={5} />
+                  <GroupBanner label="Transaction Fee Structure" colSpan={6} />
+                  <GroupBanner label="FX Spread &amp; Source" colSpan={3} />
+                  <GroupBanner label="Volume &amp; ATV" colSpan={4} />
+                  <GroupBanner label="Corridor Financials" colSpan={11} />
+                  <th />
+                </tr>
                 <tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
                   <th className="pb-2 pr-3">
                     <input
@@ -1814,26 +1866,35 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                       }
                     />
                   </th>
-                  <SortableHeader label="Corridor" field="corridor" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} />
                   <th className="pb-2 pr-3 font-medium">Pricing</th>
+                  <SortableHeader label="Corridor" field="corridor" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} />
                   <SortableHeader label="Funding Currency" field="fundingCurrency" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} />
                   <th className="pb-2 pr-3 font-medium">Source Currency</th>
-                  <th className="pb-2 pr-3 text-right font-medium">Std Fixed Fee</th>
+                  <th className="pb-2 pr-3 text-right font-medium">T.E FX Cost Spread %</th>
+                  <th className="pb-2 pr-3 text-right font-medium">Fixed Cost in USD</th>
+                  <th className="pb-2 pr-3 text-right font-medium">Variable Cost %</th>
+                  <th className="pb-2 pr-3 text-right font-medium">Std Fixed Fee USD</th>
                   <th className="pb-2 pr-3 text-right font-medium">Std Variable Fee %</th>
-                  <th className="pb-2 pr-3 text-right font-medium">ATV (USD)</th>
-                  <SortableHeader label="Yearly Volume" field="volume" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
-                  <th className="pb-2 pr-3 text-right font-medium">Yearly Trx</th>
-                  <th className="pb-2 pr-3 text-right font-medium">Fixed Fee</th>
+                  <th className="pb-2 pr-3 text-right font-medium">Fee Discount %</th>
+                  <th className="pb-2 pr-3 text-right font-medium">Fixed Fee USD</th>
+                  <th className="pb-2 pr-3 text-right font-medium">Variable Fee %</th>
                   <th className="pb-2 pr-3 text-right font-medium">
                     Fee ({feeCurrency?.isoCode3 ?? 'Selected Currency'})
                   </th>
-                  <th className="pb-2 pr-3 text-right font-medium">Variable Fee %</th>
-                  <th className="pb-2 pr-3 text-right font-medium">Fee Discount %</th>
+                  <th className="pb-2 pr-3 font-medium">Fx Source</th>
+                  <th className="pb-2 pr-3 text-right font-medium">FX Minimum Spread</th>
                   <th className="pb-2 pr-3 text-right font-medium">FX Spread</th>
-                  <SortableHeader label="Revenue" field="revenue" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
+                  <th className="pb-2 pr-3 text-right font-medium">Historical ATV</th>
+                  <th className="pb-2 pr-3 text-right font-medium">ATV (USD)</th>
+                  <SortableHeader label="Yearly Volume" field="volume" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
+                  <th className="pb-2 pr-3 text-right font-medium">Yearly Trx</th>
+                  <th className="pb-2 pr-3 text-right font-medium">Revenue Fee</th>
+                  <th className="pb-2 pr-3 text-right font-medium">FX Margin</th>
                   <th className="pb-2 pr-3 text-right font-medium">FX Margin %</th>
+                  <SortableHeader label="Total Revenue" field="revenue" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
                   <th className="pb-2 pr-3 text-right font-medium">Margin Fee</th>
                   <th className="pb-2 pr-3 text-right font-medium">Margin Fee %</th>
+                  <th className="pb-2 pr-3 text-right font-medium">Total Margin</th>
                   <SortableHeader label="Margin %" field="marginPct" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
                   <th className="pb-2 pr-3 text-right font-medium">Gross Margin %</th>
                   <SortableHeader label="Take Rate" field="takeRate" sortState={sortState} onSort={(f) => setSortState((s) => cycleSort(s, f))} align="right" />
@@ -1892,44 +1953,6 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             }
                           />
                         </td>
-                        <td className="py-2 pr-3 font-medium">
-                          <div className="flex items-center gap-2">
-                            <span>
-                              {corridor
-                                ? corridorLabel(corridor)
-                                : savedRow
-                                  ? `#${savedRow.corridorId}`
-                                  : ''}
-                            </span>
-                            {isPreview && (
-                              <span className="shrink-0 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-100">
-                                Not saved
-                              </span>
-                            )}
-                            {!isPreview && isDirty && (
-                              <span className="shrink-0 rounded bg-blue-200 px-1.5 py-0.5 text-[10px] font-semibold text-blue-900 dark:bg-blue-900 dark:text-blue-100">
-                                Unsaved changes
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            className="text-xs font-normal text-muted-foreground underline hover:text-foreground"
-                            onClick={() =>
-                              setExpandedDetailRows((prev) => {
-                                const next = new Set(prev)
-                                if (next.has(item.key)) next.delete(item.key)
-                                else next.add(item.key)
-                                return next
-                              })
-                            }
-                          >
-                            {expandedDetailRows.has(item.key) ? 'Hide details' : 'Details'}
-                          </button>
-                          {rowFieldErrors[item.key]?._general && (
-                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key]._general}</p>
-                          )}
-                        </td>
                         <td className="py-2 pr-3">
                           {isPreview ? (
                             <div className="w-28">
@@ -1971,6 +1994,30 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             </div>
                           )}
                         </td>
+                        <td className="py-2 pr-3 font-medium">
+                          <div className="flex items-center gap-2">
+                            <span>
+                              {corridor
+                                ? corridorLabel(corridor)
+                                : savedRow
+                                  ? `#${savedRow.corridorId}`
+                                  : ''}
+                            </span>
+                            {isPreview && (
+                              <span className="shrink-0 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-900 dark:text-amber-100">
+                                Not saved
+                              </span>
+                            )}
+                            {!isPreview && isDirty && (
+                              <span className="shrink-0 rounded bg-blue-200 px-1.5 py-0.5 text-[10px] font-semibold text-blue-900 dark:bg-blue-900 dark:text-blue-100">
+                                Unsaved changes
+                              </span>
+                            )}
+                          </div>
+                          {rowFieldErrors[item.key]?._general && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key]._general}</p>
+                          )}
+                        </td>
                         <td className="py-2 pr-3 text-muted-foreground">
                           {/* Not editable — remove the row and let it reappear as a preview under the intended currency instead. */}
                           {fundingCurrencyObj?.isoCode3 ?? '—'}
@@ -1978,11 +2025,203 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                         <td className="py-2 pr-3 text-muted-foreground">
                           {data.quote.sourceCurrency?.isoCode3 ?? '—'}
                         </td>
+                        <td className="py-2 pr-3 text-right">
+                          <Input
+                            type="number"
+                            step="0.001"
+                            placeholder={pct(
+                              corridor?.treasuryFxCostSpread === null || corridor?.treasuryFxCostSpread === undefined
+                                ? null
+                                : corridor.treasuryFxCostSpread * 100
+                            )}
+                            value={
+                              current.treasuryFxCostSpreadOverride === null
+                                ? ''
+                                : round2(current.treasuryFxCostSpreadOverride * 100)
+                            }
+                            className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.treasuryFxCostSpreadOverride}
+                            onChange={(e) => {
+                              const raw = e.target.value
+                              handleFieldChange(
+                                item.key,
+                                'treasuryFxCostSpreadOverride',
+                                raw === '' ? null : Number(raw) / 100
+                              )
+                            }}
+                          />
+                          {rowFieldErrors[item.key]?.treasuryFxCostSpreadOverride && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].treasuryFxCostSpreadOverride}</p>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          <Input
+                            type="number"
+                            placeholder={corridor?.costFixedUsd === null || corridor?.costFixedUsd === undefined ? '—' : String(corridor.costFixedUsd)}
+                            value={current.costFixedUsdOverride ?? ''}
+                            className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.costFixedUsdOverride}
+                            onChange={(e) => {
+                              const raw = e.target.value
+                              handleFieldChange(
+                                item.key,
+                                'costFixedUsdOverride',
+                                raw === '' ? null : Number(raw)
+                              )
+                            }}
+                          />
+                          {rowFieldErrors[item.key]?.costFixedUsdOverride && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].costFixedUsdOverride}</p>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          <Input
+                            type="number"
+                            step="0.001"
+                            placeholder={pct(
+                              corridor?.costVariablePct === null || corridor?.costVariablePct === undefined
+                                ? null
+                                : corridor.costVariablePct * 100
+                            )}
+                            value={
+                              current.costVariablePctOverride === null
+                                ? ''
+                                : round2(current.costVariablePctOverride * 100)
+                            }
+                            className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.costVariablePctOverride}
+                            onChange={(e) => {
+                              const raw = e.target.value
+                              handleFieldChange(
+                                item.key,
+                                'costVariablePctOverride',
+                                raw === '' ? null : Number(raw) / 100
+                              )
+                            }}
+                          />
+                          {rowFieldErrors[item.key]?.costVariablePctOverride && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].costVariablePctOverride}</p>
+                          )}
+                        </td>
                         <td className="py-2 pr-3 text-right text-muted-foreground">
                           {corridor ? money(corridor.stdFixedFeeUsd) : '—'}
                         </td>
                         <td className="py-2 pr-3 text-right text-muted-foreground">
                           {corridor ? pct(corridor.stdVariableFeePct) : '—'}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={current.feeDiscountPct}
+                            className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.feeDiscountPct}
+                            onChange={(e) =>
+                              handleFieldChange(item.key, 'feeDiscountPct', Number(e.target.value))
+                            }
+                          />
+                          {rowFieldErrors[item.key]?.feeDiscountPct && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].feeDiscountPct}</p>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          <Input
+                            type="number"
+                            value={current.fixedFeeUsd}
+                            className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.fixedFeeUsd}
+                            onChange={(e) =>
+                              handleFieldChange(item.key, 'fixedFeeUsd', Number(e.target.value))
+                            }
+                          />
+                          {rowFieldErrors[item.key]?.fixedFeeUsd && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].fixedFeeUsd}</p>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={current.variableFeePct}
+                            className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.variableFeePct}
+                            onChange={(e) =>
+                              handleFieldChange(item.key, 'variableFeePct', Number(e.target.value))
+                            }
+                          />
+                          {rowFieldErrors[item.key]?.variableFeePct && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].variableFeePct}</p>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          {(() => {
+                            const inCurrency = usdToFeeCurrencyAmount(current.fixedFeeUsd, feeCurrency)
+                            if (inCurrency === null) {
+                              return <span className="text-xs text-muted-foreground">No rate available</span>
+                            }
+                            return (
+                              <Input
+                                type="number"
+                                step="0.001"
+                                value={inCurrency}
+                                className="h-8 w-24"
+                                onChange={(e) => {
+                                  const usd = feeCurrencyToUsd(Number(e.target.value), feeCurrency)
+                                  if (usd !== null) handleFieldChange(item.key, 'fixedFeeUsd', usd)
+                                }}
+                              />
+                            )
+                          })()}
+                        </td>
+                        <td className="py-2 pr-3">
+                          <div className="w-32">
+                            <SimpleSelect
+                              value={current.fxSourceOverride ?? FX_SOURCE_CATALOG_DEFAULT}
+                              onValueChange={(v) =>
+                                handleFxSourceOverrideChange(item.key, v === FX_SOURCE_CATALOG_DEFAULT ? null : v)
+                              }
+                              options={[
+                                {
+                                  value: FX_SOURCE_CATALOG_DEFAULT,
+                                  label: `Catalog default${corridor?.fxSource ? ` (${corridor.fxSource})` : ''}`,
+                                },
+                                ...fxSourceOptions
+                                  .filter((s) => s !== corridor?.fxSource)
+                                  .map((s) => ({ value: s, label: s })),
+                              ]}
+                            />
+                          </div>
+                        </td>
+                        <td className="py-2 pr-3 text-right text-muted-foreground">
+                          {corridor
+                            ? pct(
+                                computeFxMinimumSpreadPct(
+                                  effectiveTreasuryFxCostSpread(current, corridor),
+                                  fundingCurrencyObj?.isoCode3,
+                                  corridor.payoutCurrency?.isoCode3 ?? ''
+                                )
+                              )
+                            : '—'}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={current.appliedFxSpread}
+                            className="h-8 w-20"
+                            aria-invalid={!!rowFieldErrors[item.key]?.appliedFxSpread}
+                            onChange={(e) =>
+                              handleFieldChange(item.key, 'appliedFxSpread', Number(e.target.value))
+                            }
+                          />
+                          {rowFieldErrors[item.key]?.appliedFxSpread && (
+                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].appliedFxSpread}</p>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-right text-muted-foreground">
+                          {corridor?.historicalAtv === null || corridor?.historicalAtv === undefined
+                            ? 'No data'
+                            : money(Math.round(corridor.historicalAtv))}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           <Input
@@ -2010,114 +2249,30 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                             <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].yearlyVolumeUsd}</p>
                           )}
                         </td>
-                        <td className="py-2 pr-3 text-right">
-                          <Input
-                            type="number"
-                            value={current.yearlyTransactions}
-                            className="h-8 w-24"
-                            aria-invalid={!!rowFieldErrors[item.key]?.yearlyTransactions}
-                            onChange={(e) =>
-                              handleFieldChange(
-                                item.key,
-                                'yearlyTransactions',
-                                Number(e.target.value)
-                              )
-                            }
-                          />
-                          {rowFieldErrors[item.key]?.yearlyTransactions && (
-                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].yearlyTransactions}</p>
-                          )}
+                        <td className="py-2 pr-3 text-right text-muted-foreground">
+                          {/* Never directly editable — always ceil(volume / ATV), matching the old app's real read-only "Yearly transactions" column. */}
+                          {current.yearlyTransactions.toLocaleString()}
                         </td>
                         <td className="py-2 pr-3 text-right">
-                          <Input
-                            type="number"
-                            value={current.fixedFeeUsd}
-                            className="h-8 w-20"
-                            aria-invalid={!!rowFieldErrors[item.key]?.fixedFeeUsd}
-                            onChange={(e) =>
-                              handleFieldChange(item.key, 'fixedFeeUsd', Number(e.target.value))
-                            }
-                          />
-                          {rowFieldErrors[item.key]?.fixedFeeUsd && (
-                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].fixedFeeUsd}</p>
-                          )}
+                          {previewSummary ? money(previewSummary.revenueFee) : money(savedRow?.revenueFee ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
-                          {(() => {
-                            const inCurrency = usdToFeeCurrencyAmount(current.fixedFeeUsd, feeCurrency)
-                            if (inCurrency === null) {
-                              return <span className="text-xs text-muted-foreground">No rate available</span>
-                            }
-                            return (
-                              <Input
-                                type="number"
-                                step="0.001"
-                                value={inCurrency}
-                                className="h-8 w-24"
-                                onChange={(e) => {
-                                  const usd = feeCurrencyToUsd(Number(e.target.value), feeCurrency)
-                                  if (usd !== null) handleFieldChange(item.key, 'fixedFeeUsd', usd)
-                                }}
-                              />
-                            )
-                          })()}
-                        </td>
-                        <td className="py-2 pr-3 text-right">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={current.variableFeePct}
-                            className="h-8 w-20"
-                            aria-invalid={!!rowFieldErrors[item.key]?.variableFeePct}
-                            onChange={(e) =>
-                              handleFieldChange(item.key, 'variableFeePct', Number(e.target.value))
-                            }
-                          />
-                          {rowFieldErrors[item.key]?.variableFeePct && (
-                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].variableFeePct}</p>
-                          )}
-                        </td>
-                        <td className="py-2 pr-3 text-right">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={current.feeDiscountPct}
-                            className="h-8 w-20"
-                            aria-invalid={!!rowFieldErrors[item.key]?.feeDiscountPct}
-                            onChange={(e) =>
-                              handleFieldChange(item.key, 'feeDiscountPct', Number(e.target.value))
-                            }
-                          />
-                          {rowFieldErrors[item.key]?.feeDiscountPct && (
-                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].feeDiscountPct}</p>
-                          )}
-                        </td>
-                        <td className="py-2 pr-3 text-right">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={current.appliedFxSpread}
-                            className="h-8 w-20"
-                            aria-invalid={!!rowFieldErrors[item.key]?.appliedFxSpread}
-                            onChange={(e) =>
-                              handleFieldChange(item.key, 'appliedFxSpread', Number(e.target.value))
-                            }
-                          />
-                          {rowFieldErrors[item.key]?.appliedFxSpread && (
-                            <p className="mt-0.5 text-xs text-destructive">{rowFieldErrors[item.key].appliedFxSpread}</p>
-                          )}
-                        </td>
-                        <td className="py-2 pr-3 text-right">
-                          {previewSummary ? money(previewSummary.totalRevenue) : money(savedRow?.totalRevenue ?? null)}
+                          {previewSummary ? money(previewSummary.fxMargin) : money(savedRow?.fxMargin ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           {previewSummary ? pct(previewSummary.fxMarginPct) : pct(savedRow?.fxMarginPct ?? null)}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          {previewSummary ? money(previewSummary.totalRevenue) : money(savedRow?.totalRevenue ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           {previewSummary ? money(previewSummary.marginFee) : money(savedRow?.marginFee ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           {previewSummary ? pct(previewSummary.marginFeePct) : pct(savedRow?.marginFeePct ?? null)}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          {previewSummary ? money(previewSummary.totalMargin) : money(savedRow?.totalMargin ?? null)}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           {previewSummary ? pct(previewSummary.marginPct) : pct(savedRow?.marginPct ?? null)}
@@ -2163,49 +2318,9 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                           </Button>
                         </td>
                       </tr>
-                      {expandedDetailRows.has(item.key) && corridor && (
-                        <tr className="border-b bg-muted/20 last:border-0">
-                          <td colSpan={23} className="p-3">
-                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                              <PreviewStat
-                                label="Treasury FX Cost Spread %"
-                                value={pct(
-                                  corridor.treasuryFxCostSpread === null
-                                    ? null
-                                    : corridor.treasuryFxCostSpread * 100
-                                )}
-                              />
-                              <PreviewStat
-                                label="Fixed Cost (USD)"
-                                value={money(corridor.costFixedUsd)}
-                              />
-                              <PreviewStat
-                                label="Variable Cost %"
-                                value={pct(
-                                  corridor.costVariablePct === null
-                                    ? null
-                                    : corridor.costVariablePct * 100
-                                )}
-                              />
-                              <PreviewStat
-                                label="Historical ATV"
-                                value={
-                                  corridor.historicalAtv === null
-                                    ? 'No data'
-                                    : money(corridor.historicalAtv)
-                                }
-                              />
-                              <PreviewStat
-                                label={`Fixed Fee in ${fundingCurrencyObj?.isoCode3 ?? 'funding currency'}`}
-                                value={feeInFundingCurrency(current.fixedFeeUsd, fundingCurrencyObj)}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                       {savedRow && isTiered && isExpanded && (
                         <tr className="border-b bg-muted/20 last:border-0">
-                          <td colSpan={23} className="p-3">
+                          <td colSpan={33} className="p-3">
                             <div className="space-y-3">
                               <div className="flex items-center justify-between">
                                 <p className="text-xs font-medium text-muted-foreground uppercase">

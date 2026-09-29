@@ -143,6 +143,26 @@ const corridorPricingFields = {
     .min(CORRIDOR_FIELD_LIMITS.feeDiscountPct.min)
     .max(CORRIDOR_FIELD_LIMITS.feeDiscountPct.max)
     .optional(),
+  // Per-row overrides of the corridor catalog's master data — null clears
+  // the override back to "use the catalog value".
+  fxSourceOverride: vine.string().trim().maxLength(120).nullable().optional(),
+  treasuryFxCostSpreadOverride: vine
+    .number()
+    .min(CORRIDOR_FIELD_LIMITS.treasuryFxCostSpreadOverride.min)
+    .max(CORRIDOR_FIELD_LIMITS.treasuryFxCostSpreadOverride.max)
+    .nullable()
+    .optional(),
+  costFixedUsdOverride: vine
+    .number()
+    .min(CORRIDOR_FIELD_LIMITS.costFixedUsdOverride.min)
+    .nullable()
+    .optional(),
+  costVariablePctOverride: vine
+    .number()
+    .min(CORRIDOR_FIELD_LIMITS.costVariablePctOverride.min)
+    .max(CORRIDOR_FIELD_LIMITS.costVariablePctOverride.max)
+    .nullable()
+    .optional(),
 }
 
 const PRICING_MODELS = ['standard', 'tiered'] as const
@@ -195,6 +215,24 @@ export const updateQuoteCorridorValidator = vine.compile(
       .number()
       .min(CORRIDOR_FIELD_LIMITS.feeDiscountPct.min)
       .max(CORRIDOR_FIELD_LIMITS.feeDiscountPct.max)
+      .optional(),
+    fxSourceOverride: vine.string().trim().maxLength(120).nullable().optional(),
+    treasuryFxCostSpreadOverride: vine
+      .number()
+      .min(CORRIDOR_FIELD_LIMITS.treasuryFxCostSpreadOverride.min)
+      .max(CORRIDOR_FIELD_LIMITS.treasuryFxCostSpreadOverride.max)
+      .nullable()
+      .optional(),
+    costFixedUsdOverride: vine
+      .number()
+      .min(CORRIDOR_FIELD_LIMITS.costFixedUsdOverride.min)
+      .nullable()
+      .optional(),
+    costVariablePctOverride: vine
+      .number()
+      .min(CORRIDOR_FIELD_LIMITS.costVariablePctOverride.min)
+      .max(CORRIDOR_FIELD_LIMITS.costVariablePctOverride.max)
+      .nullable()
       .optional(),
     pricingModel: vine.enum(PRICING_MODELS).optional(),
     tiers: vine.array(corridorTierFields).optional(),

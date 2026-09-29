@@ -9,6 +9,7 @@ import { canAccessQuote, isQuoteEditable } from '#services/quote_access_service'
 import {
   computeCorridorPricing,
   computeTieredCorridorPricing,
+  computeYearlyTransactions,
   validateTierAllocation,
   type CorridorMasterData,
   type CorridorTierInput,
@@ -59,18 +60,31 @@ async function priceAndSave(
   quote: Quote,
   tiers: CorridorTierInput[] | undefined
 ): Promise<{ error: string } | { ok: true }> {
+  // Never trusted from client input — always derived from the row's own
+  // volume/ATV, matching the old app's real non-editable "Yearly
+  // transactions" column.
+  const yearlyTransactions = computeYearlyTransactions(
+    quoteCorridor.yearlyVolumeUsd,
+    quoteCorridor.atvUsd
+  )
+  quoteCorridor.yearlyTransactions = yearlyTransactions
+
   const commonInputs = {
     transactionTypeCode: corridor.transactionTypeCode,
     fundingCurrencyId: quoteCorridor.fundingCurrencyId,
     payoutCurrencyId: corridor.payoutCurrencyId,
     opportunityType: quote.opportunityType,
     corridor: masterDataFor(corridor),
+    fxSourceOverride: quoteCorridor.fxSourceOverride,
+    treasuryFxCostSpreadOverride: quoteCorridor.treasuryFxCostSpreadOverride,
+    costFixedUsdOverride: quoteCorridor.costFixedUsdOverride,
+    costVariablePctOverride: quoteCorridor.costVariablePctOverride,
   }
 
   if (quoteCorridor.pricingModel === 'standard') {
     const pricing = computeCorridorPricing({
       yearlyVolumeUsd: quoteCorridor.yearlyVolumeUsd,
-      yearlyTransactions: quoteCorridor.yearlyTransactions,
+      yearlyTransactions,
       fixedFeeUsd: quoteCorridor.fixedFeeUsd,
       variableFeePct: quoteCorridor.variableFeePct,
       appliedFxSpread: quoteCorridor.appliedFxSpread,
@@ -210,6 +224,10 @@ export default class QuoteCorridorsController {
       appliedFxSpread: payload.appliedFxSpread,
       feeDiscountPct: payload.feeDiscountPct ?? 0,
       pricingModel: payload.pricingModel ?? 'standard',
+      fxSourceOverride: payload.fxSourceOverride ?? null,
+      treasuryFxCostSpreadOverride: payload.treasuryFxCostSpreadOverride ?? null,
+      costFixedUsdOverride: payload.costFixedUsdOverride ?? null,
+      costVariablePctOverride: payload.costVariablePctOverride ?? null,
     })
     await quoteCorridor.save()
 

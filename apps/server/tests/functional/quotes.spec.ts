@@ -323,6 +323,10 @@ test.group('Quote corridors', () => {
       .json({
         corridorId: corridor.id,
         yearlyVolumeUsd: 1_000_000,
+        // yearlyTransactions is never trusted from the client — it's always
+        // derived server-side as ceil(volume / atv). atvUsd = 100 here so
+        // that derivation lands on the same 10,000 this test exercises.
+        atvUsd: 100,
         yearlyTransactions: 10_000,
         fixedFeeUsd: 0.5,
         variableFeePct: 1,
@@ -330,6 +334,7 @@ test.group('Quote corridors', () => {
       })
 
     response.assertStatus(201)
+    assert.equal(response.body().yearlyTransactions, 10_000)
     assert.equal(response.body().totalRevenue, 20_000)
     assert.equal(response.body().needsApproval, false)
   })

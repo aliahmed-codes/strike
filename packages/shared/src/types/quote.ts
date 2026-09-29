@@ -109,6 +109,15 @@ export interface QuoteCorridorInput {
   fundingCurrencyId?: number | null
   atvUsd?: number
   yearlyVolumeUsd: number
+  /**
+   * Not a free-typed field, on the client or the server — always derived
+   * from `yearlyVolumeUsd`/`atvUsd` (`Math.ceil(volume / atv)`, matching the
+   * old app's real non-editable "Yearly transactions" column). Kept as a
+   * regular input field rather than dropped from the payload shape so a
+   * caller can still read/send a consistent value, but the backend
+   * recomputes and overwrites it unconditionally on every save — see
+   * `computeYearlyTransactions` in `corridor_pricing_math.ts`.
+   */
   yearlyTransactions: number
   fixedFeeUsd: number
   variableFeePct: number
@@ -116,6 +125,11 @@ export interface QuoteCorridorInput {
   feeDiscountPct?: number
   pricingModel?: PricingModel
   tiers?: CorridorTierInput[]
+  /** Per-row overrides of the corridor catalog's own master data — `null`/omitted means "use the catalog value". See `corridor_pricing_math.ts`. */
+  fxSourceOverride?: string | null
+  treasuryFxCostSpreadOverride?: number | null
+  costFixedUsdOverride?: number | null
+  costVariablePctOverride?: number | null
 }
 
 export interface QuoteCorridor extends QuoteCorridorInput {

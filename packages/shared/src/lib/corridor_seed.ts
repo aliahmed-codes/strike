@@ -1,4 +1,5 @@
 import type { Corridor, QuoteCorridorInput } from '../types/quote.js'
+import { DEFAULT_ATV_USD, computeYearlyTransactions } from './corridor_pricing_math.js'
 
 /**
  * Default values for a corridor that's only being *previewed* (matched by the
@@ -10,12 +11,14 @@ import type { Corridor, QuoteCorridorInput } from '../types/quote.js'
 export function seedQuoteCorridorFromCatalog(
   corridor: Corridor
 ): Omit<QuoteCorridorInput, 'corridorId'> {
+  const atvUsd = corridor.historicalAtv ?? DEFAULT_ATV_USD
+  const yearlyVolumeUsd = 0
   return {
-    atvUsd: corridor.historicalAtv ?? 0,
+    atvUsd,
     fixedFeeUsd: corridor.stdFixedFeeUsd ?? 0,
     variableFeePct: corridor.stdVariableFeePct ?? 0,
-    yearlyVolumeUsd: 0,
-    yearlyTransactions: 0,
+    yearlyVolumeUsd,
+    yearlyTransactions: computeYearlyTransactions(yearlyVolumeUsd, atvUsd),
     appliedFxSpread: 0,
     feeDiscountPct: 0,
     pricingModel: 'standard',

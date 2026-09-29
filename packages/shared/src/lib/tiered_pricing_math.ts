@@ -14,6 +14,7 @@
 
 import {
   computeCorridorPricing,
+  computeYearlyTransactions,
   type CorridorMasterData,
   type CorridorPricingResult,
 } from './corridor_pricing_math.js'
@@ -39,6 +40,10 @@ export interface TieredCorridorPricingInputs {
   payoutCurrencyId: number
   opportunityType: string | null
   corridor: CorridorMasterData
+  fxSourceOverride?: string | null
+  treasuryFxCostSpreadOverride?: number | null
+  costFixedUsdOverride?: number | null
+  costVariablePctOverride?: number | null
 }
 
 export interface TieredCorridorPricingResult {
@@ -69,11 +74,6 @@ function round(value: number, decimals: number): number {
   return Math.round(value * factor) / factor
 }
 
-function transactionsForVolume(volumeUsd: number, atvUsd: number): number {
-  if (atvUsd <= 0 || volumeUsd <= 0) return 0
-  return Math.ceil(volumeUsd / atvUsd)
-}
-
 function priceSlice(
   tierNumber: number,
   volumeUsd: number,
@@ -82,7 +82,7 @@ function priceSlice(
   appliedFxSpread: number,
   inputs: TieredCorridorPricingInputs
 ): CorridorTierResult {
-  const yearlyTransactions = transactionsForVolume(volumeUsd, inputs.atvUsd)
+  const yearlyTransactions = computeYearlyTransactions(volumeUsd, inputs.atvUsd)
   const priced = computeCorridorPricing({
     yearlyVolumeUsd: volumeUsd,
     yearlyTransactions,
@@ -95,6 +95,10 @@ function priceSlice(
     payoutCurrencyId: inputs.payoutCurrencyId,
     opportunityType: inputs.opportunityType,
     corridor: inputs.corridor,
+    fxSourceOverride: inputs.fxSourceOverride,
+    treasuryFxCostSpreadOverride: inputs.treasuryFxCostSpreadOverride,
+    costFixedUsdOverride: inputs.costFixedUsdOverride,
+    costVariablePctOverride: inputs.costVariablePctOverride,
   })
   return { tierNumber, yearlyTransactions, ...priced }
 }

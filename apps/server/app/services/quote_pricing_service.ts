@@ -2,6 +2,7 @@ import {
   computeCorridorPricing,
   computeQuoteTotals,
   computeTieredCorridorPricing,
+  computeYearlyTransactions,
   validateTierAllocation,
 } from '@strike/shared'
 import type {
@@ -33,6 +34,7 @@ export {
   computeCorridorPricing,
   computeQuoteTotals,
   computeTieredCorridorPricing,
+  computeYearlyTransactions,
   validateTierAllocation,
 }
 export type {

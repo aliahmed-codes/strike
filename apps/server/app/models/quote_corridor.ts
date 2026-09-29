@@ -53,6 +53,20 @@ export default class QuoteCorridor extends BaseModel {
   @column()
   declare pricingModel: 'standard' | 'tiered'
 
+  // Per-row overrides of the corridor catalog's own master data — null
+  // means "use the catalog value" (see corridor_pricing_math.ts).
+  @column()
+  declare fxSourceOverride: string | null
+
+  @column()
+  declare treasuryFxCostSpreadOverride: number | null
+
+  @column()
+  declare costFixedUsdOverride: number | null
+
+  @column()
+  declare costVariablePctOverride: number | null
+
   @hasMany(() => QuoteCorridorTier)
   declare tiers: HasMany<typeof QuoteCorridorTier>
 

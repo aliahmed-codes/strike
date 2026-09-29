@@ -12,6 +12,12 @@ export const CORRIDOR_FIELD_LIMITS = {
   variableFeePct: { min: 0, max: 100 },
   appliedFxSpread: { min: 0, max: 100 },
   feeDiscountPct: { min: 0, max: 100 },
+  // Stored as fractions (matching the catalog fields they override — see
+  // `corridor_pricing_math.ts`), not percent — the UI converts the
+  // percent value the user types by /100 before validating/storing.
+  treasuryFxCostSpreadOverride: { min: 0, max: 1 },
+  costFixedUsdOverride: { min: 0 },
+  costVariablePctOverride: { min: 0, max: 1 },
 } as const
 
 export type CorridorLimitedField = keyof typeof CORRIDOR_FIELD_LIMITS

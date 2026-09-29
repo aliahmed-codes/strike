@@ -26,6 +26,10 @@ export type CorridorRowEdit = Partial<{
   variableFeePct: number
   appliedFxSpread: number
   feeDiscountPct: number
+  fxSourceOverride: string | null
+  treasuryFxCostSpreadOverride: number | null
+  costFixedUsdOverride: number | null
+  costVariablePctOverride: number | null
 }>
 
 interface CorridorEditsState {

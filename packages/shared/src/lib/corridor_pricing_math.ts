@@ -32,6 +32,51 @@ export interface CorridorPricingInputs {
   payoutCurrencyId: number
   opportunityType: string | null
   corridor: CorridorMasterData
+  /**
+   * Per-quote-corridor overrides of the corridor catalog's own master data —
+   * `null`/`undefined` means "use the catalog value". These are the old
+   * app's real "T.E FX Cost Spread %", "Fixed Cost in USD", "Variable Cost
+   * %", and "Fx Source" editable cells. Every formula below reads through
+   * `effectiveFxSource`/`effectiveTreasuryFxCostSpread`/etc. rather than the
+   * raw `corridor.*` field, so an edit here is guaranteed to affect every
+   * dependent number consistently — see this file's header comment for why
+   * that wasn't true in the old app.
+   */
+  fxSourceOverride?: string | null
+  treasuryFxCostSpreadOverride?: number | null
+  costFixedUsdOverride?: number | null
+  costVariablePctOverride?: number | null
+}
+
+/** The old app's real default ATV when a corridor has no historical data and the user hasn't entered one. */
+export const DEFAULT_ATV_USD = 450
+
+/**
+ * Yearly transactions is never a free-typed field — it's always derived from
+ * volume and ATV, exactly like the old app's real (non-editable) "Yearly
+ * transactions" column: `ROUNDUP(volume / ATV, 0)`, falling back to the
+ * default ATV when none is set.
+ */
+export function computeYearlyTransactions(yearlyVolumeUsd: number, atvUsd: number): number {
+  if (yearlyVolumeUsd <= 0) return 0
+  const workingAtv = atvUsd > 0 ? atvUsd : DEFAULT_ATV_USD
+  return Math.ceil(yearlyVolumeUsd / workingAtv)
+}
+
+export function effectiveFxSource(inputs: CorridorPricingInputs): string | null {
+  return inputs.fxSourceOverride ?? inputs.corridor.fxSource
+}
+
+export function effectiveTreasuryFxCostSpread(inputs: CorridorPricingInputs): number | null {
+  return inputs.treasuryFxCostSpreadOverride ?? inputs.corridor.treasuryFxCostSpread
+}
+
+export function effectiveCostFixedUsd(inputs: CorridorPricingInputs): number | null {
+  return inputs.costFixedUsdOverride ?? inputs.corridor.costFixedUsd
+}
+
+export function effectiveCostVariablePct(inputs: CorridorPricingInputs): number | null {
+  return inputs.costVariablePctOverride ?? inputs.corridor.costVariablePct
 }
 
 export interface CorridorPricingResult {
@@ -77,11 +122,11 @@ function round(value: number, decimals: number): number {
 }
 
 function computeFxMargin(inputs: CorridorPricingInputs): number {
-  const { corridor, appliedFxSpread, yearlyVolumeUsd, fundingCurrencyId, payoutCurrencyId } = inputs
+  const { appliedFxSpread, yearlyVolumeUsd, fundingCurrencyId, payoutCurrencyId } = inputs
   const spreadFraction = appliedFxSpread / 100
-  const costFraction = corridor.treasuryFxCostSpread ?? 0
+  const costFraction = effectiveTreasuryFxCostSpread(inputs) ?? 0
 
-  if (corridor.fxSource === 'Cost Plus') {
+  if (effectiveFxSource(inputs) === 'Cost Plus') {
     return yearlyVolumeUsd * spreadFraction
   }
   if (fundingCurrencyId !== null && fundingCurrencyId === payoutCurrencyId) {
@@ -91,9 +136,9 @@ function computeFxMargin(inputs: CorridorPricingInputs): number {
 }
 
 function computeMarginFee(inputs: CorridorPricingInputs, revenueFee: number): number {
-  const { corridor, yearlyTransactions, yearlyVolumeUsd } = inputs
-  const fixedCost = (corridor.costFixedUsd ?? 0) * yearlyTransactions
-  const variableCost = (corridor.costVariablePct ?? 0) * yearlyVolumeUsd
+  const { yearlyTransactions, yearlyVolumeUsd } = inputs
+  const fixedCost = (effectiveCostFixedUsd(inputs) ?? 0) * yearlyTransactions
+  const variableCost = (effectiveCostVariablePct(inputs) ?? 0) * yearlyVolumeUsd
   return Math.round(revenueFee) - Math.round(fixedCost + variableCost)
 }
 
@@ -132,7 +177,7 @@ function checkFinancialApproval(
     reasons.push('B2B transaction type requires approval')
   }
 
-  if (inputs.corridor.fxSource === 'Like for Like' && isB2B) {
+  if (effectiveFxSource(inputs) === 'Like for Like' && isB2B) {
     if (inputs.variableFeePct < LIKE_FOR_LIKE_B2B_MIN_VARIABLE_FEE_PCT) {
       reasons.push(
         `Like-for-Like B2B variable fee of ${inputs.variableFeePct}% is below the ${LIKE_FOR_LIKE_B2B_MIN_VARIABLE_FEE_PCT}% minimum`

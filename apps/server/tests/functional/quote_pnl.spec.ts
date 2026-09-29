@@ -83,6 +83,9 @@ async function addCorridor(
     .json({
       corridorId,
       yearlyVolumeUsd: 1_000_000,
+      // yearlyTransactions is derived server-side as ceil(volume / atv); atv
+      // = 100 here so that derivation lands on the 10,000 these tests expect.
+      atvUsd: 100,
       yearlyTransactions: 10_000,
       fixedFeeUsd: 0.5,
       variableFeePct: 1,
