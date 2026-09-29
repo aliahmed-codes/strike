@@ -959,10 +959,10 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
     const payoutIso = row.corridor.payoutCurrency?.isoCode3 ?? ''
     const treasuryCost = effectiveTreasuryFxCostSpread(row.current, row.corridor)
     if (fxSpreadMode === 'default') {
-      return computeFxDefaultSpreadPct(treasuryCost, fundingIso, payoutIso)
+      return computeFxDefaultSpreadPct(treasuryCost, fundingIso, payoutIso, row.mbp)
     }
     if (fxSpreadMode === 'minimum') {
-      return computeFxMinimumSpreadPct(treasuryCost, fundingIso, payoutIso)
+      return computeFxMinimumSpreadPct(treasuryCost, fundingIso, payoutIso, row.mbp)
     }
     // markup: treasury cost + a user-entered markup on top, per the old app's real preset.
     const markup = Number(fxMarkupValue)
@@ -2288,7 +2288,8 @@ function PricingTabContent({ tabKey, quoteId }: { tabKey: string; quoteId: numbe
                                 computeFxMinimumSpreadPct(
                                   effectiveTreasuryFxCostSpread(current, corridor),
                                   fundingCurrencyObj?.isoCode3,
-                                  corridor.payoutCurrency?.isoCode3 ?? ''
+                                  corridor.payoutCurrency?.isoCode3 ?? '',
+                                  row.mbp
                                 )
                               )
                             : '—'}
